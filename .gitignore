@@ -1,0 +1,6 @@
+*.pem
+*.key
+*.p8
+*.p12
+keys/
+.env
