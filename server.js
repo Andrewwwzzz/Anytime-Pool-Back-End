@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const session = require("express-session");
+const cors = require("cors");
 
 const bookingRoutes = require("./routes/booking.routes");
 const paymentRoutes = require("./routes/payment.routes");
@@ -17,13 +18,29 @@ const app = express();
 console.log("ENV CHECK:", {
   MONGODB_URI: !!process.env.MONGODB_URI,
   SESSION_SECRET: !!process.env.SESSION_SECRET,
-  SINGPASS_CLIENT_ID: !!process.env.SINGPASS_CLIENT_ID,
-  SINGPASS_REDIRECT_URI: !!process.env.SINGPASS_REDIRECT_URI,
-  SIGNING_PRIVATE_KEY: !!process.env.SIGNING_PRIVATE_KEY,
+  STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
 });
 
 /* ======================================================
-   JSON Parser
+   CORS (REQUIRED FOR FRONTEND CONNECTION)
+====================================================== */
+app.use(
+  cors({
+    origin: "https://anytimepoolsg.com",
+    credentials: true,
+  })
+);
+
+/* ======================================================
+   Stripe Webhook RAW BODY (MUST BE BEFORE express.json)
+====================================================== */
+app.use(
+  "/api/payments/webhook",
+  express.raw({ type: "application/json" })
+);
+
+/* ======================================================
+   JSON Parser (AFTER webhook raw)
 ====================================================== */
 app.use(express.json());
 
@@ -36,7 +53,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // Render uses HTTPS automatically
+      secure: false,
       httpOnly: true,
       sameSite: "lax",
     },
@@ -70,7 +87,6 @@ if (!process.env.MONGODB_URI) {
     .then(() => console.log("✅ MongoDB Connected"))
     .catch((err) => {
       console.error("❌ MongoDB Connection Error:", err.message);
-      // DO NOT exit — keep server alive for debugging
     });
 }
 
