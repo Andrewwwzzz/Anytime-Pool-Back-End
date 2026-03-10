@@ -1,40 +1,24 @@
 const mongoose = require("mongoose")
 
 const BookingSchema = new mongoose.Schema({
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true
-    },
 
-    tableId: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true
-    },
+    userId: mongoose.Schema.Types.ObjectId,
+    tableId: mongoose.Schema.Types.ObjectId,
 
-    startTime: {
-        type: Date,
-        required: true
-    },
-
-    endTime: {
-        type: Date,
-        required: true
-    },
+    startTime: Date,
+    endTime: Date,
 
     status: {
         type: String,
-        enum: ["pending_payment", "confirmed", "cancelled", "expired"],
         default: "pending_payment"
     },
 
     paymentStatus: {
         type: String,
-        enum: ["unpaid", "paid"],
         default: "unpaid"
     },
 
     stripeSessionId: String,
-
     expiresAt: Date
 
 }, { timestamps: true })

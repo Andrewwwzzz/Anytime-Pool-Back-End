@@ -96,13 +96,9 @@ router.post("/webhook/stripe", async (req, res) => {
 
         const booking = await Booking.findById(bookingId)
 
-        if (!booking) {
-            return res.json({ received: true })
-        }
+        if (!booking) return res.json({ received: true })
 
-        if (booking.paymentStatus === "paid") {
-            return res.json({ received: true })
-        }
+        if (booking.paymentStatus === "paid") return res.json({ received: true })
 
         booking.status = "confirmed"
         booking.paymentStatus = "paid"
