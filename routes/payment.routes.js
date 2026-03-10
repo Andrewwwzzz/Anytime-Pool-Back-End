@@ -3,7 +3,7 @@ const Stripe = require("stripe")
 
 const router = express.Router()
 
-const Booking = require("../models/Booking")
+const Booking = require("../models/booking")
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY)
 

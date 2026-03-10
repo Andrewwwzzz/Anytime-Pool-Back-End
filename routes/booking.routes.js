@@ -1,7 +1,7 @@
 const express = require("express")
 const router = express.Router()
 
-const Booking = require("../models/Booking")
+const Booking = require("../models/booking")
 
 router.post("/create", async (req, res) => {
 
