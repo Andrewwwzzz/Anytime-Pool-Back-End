@@ -1,54 +1,42 @@
-const mongoose = require("mongoose");
+const mongoose = require("mongoose")
 
-const bookingSchema = new mongoose.Schema(
-  {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true
+const BookingSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
     },
 
-    table: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Table",
-      required: true
+    tableId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true
     },
 
     startTime: {
-      type: Date,
-      required: true
+        type: Date,
+        required: true
     },
 
     endTime: {
-      type: Date,
-      required: true
-    },
-
-    totalPrice: {
-      type: Number,
-      required: true
+        type: Date,
+        required: true
     },
 
     status: {
-      type: String,
-      enum: ["pending", "confirmed", "cancelled", "refunded"],
-      default: "pending"
+        type: String,
+        enum: ["pending_payment", "confirmed", "cancelled", "expired"],
+        default: "pending_payment"
     },
 
-    // Stripe session id (checkout session)
-    paymentSessionId: {
-      type: String
+    paymentStatus: {
+        type: String,
+        enum: ["unpaid", "paid"],
+        default: "unpaid"
     },
 
-    // Stripe payment intent id (used for refund)
-    paymentIntentId: {
-      type: String
-    }
+    stripeSessionId: String,
 
-  },
-  {
-    timestamps: true
-  }
-);
+    expiresAt: Date
 
-module.exports = mongoose.model("Booking", bookingSchema);
+}, { timestamps: true })
+
+module.exports = mongoose.model("Booking", BookingSchema)

@@ -1,35 +1,51 @@
-const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../middleware/auth.middleware");
-const bookingService = require("../services/booking.service");
+const express = require("express")
+const router = express.Router()
 
-router.post("/", authMiddleware, async (req, res) => {
-  try {
-    const { tableId, startTime, endTime } = req.body;
+const Booking = require("../models/Booking")
 
-    if (!tableId || !startTime || !endTime) {
-      return res.status(400).json({
-        error: "Missing fields"
-      });
+router.post("/create", async (req, res) => {
+
+    try {
+
+        const { userId, tableId, startTime, endTime } = req.body
+
+        const conflict = await Booking.findOne({
+            tableId,
+            status: { $in: ["pending_payment", "confirmed"] },
+            startTime: { $lt: new Date(endTime) },
+            endTime: { $gt: new Date(startTime) }
+        })
+
+        if (conflict) {
+            return res.status(400).json({
+                error: "Table already booked"
+            })
+        }
+
+        const expiry = new Date(Date.now() + 10 * 60 * 1000)
+
+        const booking = await Booking.create({
+            userId,
+            tableId,
+            startTime,
+            endTime,
+            expiresAt: expiry
+        })
+
+        res.json({
+            message: "Booking created",
+            booking
+        })
+
+    } catch (error) {
+
+        console.log(error)
+
+        res.status(500).json({
+            error: "Server error"
+        })
     }
 
-    const booking = await bookingService.createBooking({
-      userId: req.user.id,
-      tableId,
-      startTime,
-      endTime
-    });
+})
 
-    res.status(201).json({
-      message: "Booking created",
-      booking
-    });
-
-  } catch (error) {
-    res.status(400).json({
-      error: error.message
-    });
-  }
-});
-
-module.exports = router;
+module.exports = router

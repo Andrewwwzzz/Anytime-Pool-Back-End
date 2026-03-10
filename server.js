@@ -1,111 +1,38 @@
-require("dotenv").config();
-const express = require("express");
-const mongoose = require("mongoose");
-const session = require("express-session");
-const cors = require("cors");
+require("dotenv").config()
 
-const bookingRoutes = require("./routes/booking.routes");
-const paymentRoutes = require("./routes/payment.routes");
-const jwksRoutes = require("./routes/jwks.routes");
-const singpassRoutes = require("./routes/singpass.routes");
-const authRoutes = require("./routes/auth.routes");
+const express = require("express")
+const mongoose = require("mongoose")
 
-const app = express();
+const bookingRoutes = require("./routes/booking.routes")
+const paymentRoutes = require("./routes/payment.routes")
 
-/* ======================================================
-   DEBUG ENV CHECK (Safe – does not expose secrets)
-====================================================== */
-console.log("ENV CHECK:", {
-  MONGODB_URI: !!process.env.MONGODB_URI,
-  SESSION_SECRET: !!process.env.SESSION_SECRET,
-  STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
-});
+require("./jobs/expireBookings")
 
-/* ======================================================
-   CORS (REQUIRED FOR FRONTEND CONNECTION)
-====================================================== */
-app.use(
-  cors({
-    origin: "https://anytimepoolsg.com",
-    credentials: true,
-  })
-);
+const app = express()
 
-/* ======================================================
-   Stripe Webhook RAW BODY (MUST BE BEFORE express.json)
-====================================================== */
-app.use(
-  "/api/payments/webhook",
-  express.raw({ type: "application/json" })
-);
+app.use("/webhook/stripe", express.raw({ type: "application/json" }))
 
-/* ======================================================
-   JSON Parser (AFTER webhook raw)
-====================================================== */
-app.use(express.json());
+app.use(express.json())
 
-/* ======================================================
-   Session (MUST BE BEFORE ROUTES)
-====================================================== */
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "fallback-secret-dev",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false,
-      httpOnly: true,
-      sameSite: "lax",
-    },
-  })
-);
+mongoose.connect(process.env.MONGO_URI)
 
-/* ======================================================
-   Health Check
-====================================================== */
-app.get("/healthz", (req, res) => {
-  res.status(200).send("OK");
-});
+mongoose.connection.on("connected", () => {
+    console.log("MongoDB connected")
+})
 
-/* ======================================================
-   Routes
-====================================================== */
-app.use("/auth", authRoutes);
-app.use("/api/auth/singpass", singpassRoutes);
-app.use("/api/bookings", bookingRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/", jwksRoutes);
+mongoose.connection.on("error", (err) => {
+    console.log(err)
+})
 
-/* ======================================================
-   MongoDB Connection
-====================================================== */
-if (!process.env.MONGODB_URI) {
-  console.error("❌ MONGODB_URI missing");
-} else {
-  mongoose
-    .connect(process.env.MONGODB_URI)
-    .then(() => console.log("✅ MongoDB Connected"))
-    .catch((err) => {
-      console.error("❌ MongoDB Connection Error:", err.message);
-    });
-}
+app.use("/api/bookings", bookingRoutes)
+app.use("/api/payments", paymentRoutes)
 
-/* ======================================================
-   Graceful Error Handling
-====================================================== */
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT EXCEPTION:", err);
-});
+app.get("/", (req, res) => {
+    res.send("Anytime Pool API running")
+})
 
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION:", err);
-});
-
-/* ======================================================
-   Start Server
-====================================================== */
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+    console.log("Server running on port " + PORT)
+})
