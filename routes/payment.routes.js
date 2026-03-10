@@ -40,7 +40,7 @@ router.post("/create-checkout", async (req, res) => {
 
             mode: "payment",
 
-            success_url: "https://anytimepoolsg.com/payment-success",
+            success_url: "https://anytimepoolsg.com/booking-success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url: "https://anytimepoolsg.com/payment-cancel",
 
             metadata: {
