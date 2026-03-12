@@ -20,9 +20,7 @@ cron.schedule("* * * * *", async () => {
     )
 
     if (result.modifiedCount > 0) {
-
       console.log("Expired bookings:", result.modifiedCount)
-
     }
 
   } catch (error) {

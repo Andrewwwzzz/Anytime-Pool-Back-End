@@ -10,6 +10,7 @@ const Booking = require("../models/Booking")
 
 /*
 CREATE STRIPE CHECKOUT
+Locks payment but does NOT confirm booking
 */
 router.post("/create-checkout", async (req, res) => {
 
@@ -34,19 +35,15 @@ router.post("/create-checkout", async (req, res) => {
     )
 
     if (!booking) {
-
       return res.status(409).json({
-        error: "Another user is completing payment"
+        error: "Another user is currently completing payment"
       })
-
     }
 
     if (booking.expiresAt < new Date()) {
-
       return res.status(400).json({
         error: "Booking expired"
       })
-
     }
 
 
@@ -100,58 +97,8 @@ router.post("/create-checkout", async (req, res) => {
 
 
 /*
-WALLET PAYMENT
-*/
-router.post("/wallet-pay", async (req, res) => {
-
-  try {
-
-    const { bookingId } = req.body
-
-    const booking = await Booking.findById(bookingId)
-
-    if (!booking) {
-      return res.status(404).json({ error: "Booking not found" })
-    }
-
-    if (booking.status !== "pending_payment") {
-      return res.status(409).json({ error: "Booking already processed" })
-    }
-
-    if (booking.expiresAt < new Date()) {
-      return res.status(400).json({ error: "Booking expired" })
-    }
-
-    await Booking.updateOne(
-      { _id: bookingId },
-      {
-        status: "confirmed",
-        paymentStatus: "paid",
-        paymentMethod: "wallet",
-        paymentLock: false
-      }
-    )
-
-    res.json({
-      success: true
-    })
-
-  } catch (err) {
-
-    console.log("Wallet payment error:", err)
-
-    res.status(500).json({
-      error: "Wallet payment failed"
-    })
-
-  }
-
-})
-
-
-
-/*
 STRIPE WEBHOOK
+Only here booking becomes CONFIRMED
 */
 router.post("/webhook", async (req, res) => {
 
@@ -174,7 +121,6 @@ router.post("/webhook", async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`)
   }
 
-
   try {
 
     if (event.type === "checkout.session.completed") {
@@ -189,19 +135,10 @@ router.post("/webhook", async (req, res) => {
       }
 
       if (booking.status === "confirmed") {
-
-        console.log("Wallet already confirmed → refund Stripe")
-
-        await stripe.refunds.create({
-          payment_intent: session.payment_intent
-        })
-
         return res.json({ received: true })
       }
 
       if (booking.expiresAt < new Date()) {
-
-        console.log("Expired booking → refund Stripe")
 
         await stripe.refunds.create({
           payment_intent: session.payment_intent
@@ -215,17 +152,17 @@ router.post("/webhook", async (req, res) => {
         return res.json({ received: true })
       }
 
-
       await Booking.updateOne(
         { _id: bookingId },
         {
           status: "confirmed",
           paymentStatus: "paid",
           paymentMethod: "stripe",
-          paymentLock: false}
+          paymentLock: false
+        }
       )
 
-      console.log("Booking confirmed via Stripe:", bookingId)
+      console.log("Booking confirmed:", bookingId)
 
     }
 
