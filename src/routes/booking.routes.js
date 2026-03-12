@@ -91,11 +91,13 @@ router.get("/availability", async (req, res) => {
 
     const bookings = await Booking.find({
       sessionId: sessionId
-    })
+    }).populate("tableId")
 
     const result = bookings.map(b => ({
-      tableId: b.tableId.toString(),
+
+      tableId: b.tableId.hardware_id,   // important fix
       status: b.status
+
     }))
 
     res.json(result)
