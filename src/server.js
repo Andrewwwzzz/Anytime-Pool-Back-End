@@ -1,74 +1,77 @@
+require("dotenv").config()
+
 const express = require("express")
 const mongoose = require("mongoose")
 const cors = require("cors")
-require("dotenv").config()
-require("./jobs/expireBookings")
 
 const app = express()
 
 
 
 /*
-Stripe webhook requires RAW body
-This MUST come before express.json()
+IMPORTANT
+Stripe webhook must use RAW body
 */
-app.use("/api/payments/webhook/stripe", express.raw({ type: "application/json" }))
-
+app.use("/api/payments/webhook", express.raw({ type: "application/json" }))
 
 
 /*
-Normal middleware
+Normal JSON body parser
 */
 app.use(express.json())
+
+
+
 app.use(cors())
 
 
 
 /*
-Import routes
+ROUTES
 */
 const bookingRoutes = require("./routes/booking.routes")
 const paymentRoutes = require("./routes/payment.routes")
 
-
-
-/*
-Register routes
-*/
 app.use("/api/bookings", bookingRoutes)
 app.use("/api/payments", paymentRoutes)
 
 
 
 /*
-MongoDB connection
+BACKGROUND WORKERS
 */
-mongoose.connect(process.env.MONGO_URI)
-
-mongoose.connection.on("connected", () => {
-  console.log("MongoDB connected")
-})
-
-mongoose.connection.on("error", (err) => {
-  console.log("MongoDB connection error:", err)
-})
+require("./jobs/expireBookings")
 
 
 
 /*
-Health check endpoint
+HEALTH CHECK
 */
 app.get("/health", (req, res) => {
-  res.send("Server running")
+  res.json({ status: "ok" })
 })
 
 
 
 /*
-Start server
+DATABASE CONNECTION
 */
-const PORT = process.env.PORT || 5000
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log("MongoDB connected")
+  })
+  .catch((err) => {
+    console.log("MongoDB connection error:", err)
+  })
+
+
+
+/*
+START SERVER
+*/
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, () => {
-  console.log("Server running on port", PORT)
+  console.log(`Server running on port ${PORT}`)
 })
