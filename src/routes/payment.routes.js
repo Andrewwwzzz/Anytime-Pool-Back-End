@@ -51,7 +51,7 @@ router.post("/create-checkout", async (req, res) => {
             product_data: {
               name: "Pool Table Booking"
             },
-            unit_amount: Math.round(amount * 100)
+            unit_amount: amount
           },
           quantity: 1
         }
