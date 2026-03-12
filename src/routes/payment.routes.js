@@ -9,10 +9,9 @@ const Booking = require("../models/Booking")
 
 
 /*
-CREATE STRIPE CHECKOUT
-LOCK PAYMENT FIRST
+Create Stripe Checkout
+Locks payment before creating session
 */
-
 router.post("/create-checkout", async (req, res) => {
 
   try {
@@ -31,9 +30,7 @@ router.post("/create-checkout", async (req, res) => {
         paymentLock: true
       },
 
-      {
-        new: true
-      }
+      { new: true }
 
     )
 
@@ -96,7 +93,7 @@ router.post("/create-checkout", async (req, res) => {
 
   } catch (err) {
 
-    console.error("Stripe checkout error:", err)
+    console.log("Stripe checkout error:", err)
 
     res.status(500).json({
       error: "Could not create checkout session"
@@ -109,35 +106,32 @@ router.post("/create-checkout", async (req, res) => {
 
 
 /*
-STRIPE WEBHOOK
+Stripe Webhook
 */
+router.post("/webhook", async (req, res) => {
 
-router.post(
-  "/webhook",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
+  let event
+
+  try {
 
     const sig = req.headers["stripe-signature"]
 
-    let event
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    )
 
-    try {
+  } catch (err) {
 
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      )
+    console.log("Webhook verification failed:", err.message)
 
-    } catch (err) {
-
-      console.log("Webhook signature error:", err.message)
-
-      return res.status(400).send(`Webhook Error: ${err.message}`)
-
-    }
+    return res.status(400).send(`Webhook Error: ${err.message}`)
+  }
 
 
+
+  try {
 
     if (event.type === "checkout.session.completed") {
 
@@ -147,30 +141,28 @@ router.post(
       const booking = await Booking.findById(bookingId)
 
       if (!booking) {
-        return res.json({ received: true })
+        return res.status(200).json({ received: true })
       }
 
 
       /*
-      PAYMENT ARRIVED AFTER WALLET PAYMENT
+      Wallet already paid first
       */
-
       if (booking.status === "confirmed") {
 
-        console.log("Stripe payment arrived after wallet payment → refund")
+        console.log("Stripe payment arrived after wallet → refund")
 
         await stripe.refunds.create({
           payment_intent: session.payment_intent
         })
 
-        return res.json({ received: true })
+        return res.status(200).json({ received: true })
       }
 
 
       /*
-      PAYMENT ARRIVED AFTER EXPIRY
+      Booking expired
       */
-
       if (booking.expiresAt < new Date()) {
 
         console.log("Stripe payment arrived after expiry → refund")
@@ -184,14 +176,13 @@ router.post(
           { status: "expired", paymentLock: false }
         )
 
-        return res.json({ received: true })
+        return res.status(200).json({ received: true })
       }
 
 
       /*
-      VALID PAYMENT
+      Valid payment
       */
-
       await Booking.updateOne(
         { _id: bookingId },
         {
@@ -205,10 +196,17 @@ router.post(
 
     }
 
-    res.json({ received: true })
+    res.status(200).json({ received: true })
+
+  } catch (err) {
+
+    console.log("Webhook processing error:", err)
+
+    res.status(200).json({ received: true })
 
   }
-)
+
+})
 
 
 
