@@ -49,13 +49,13 @@ router.post("/create", async (req, res) => {
     }
 
     const booking = new Booking({
-      userId: userId,
-      tableId: table._id,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      status: "pending",
-      paymentStatus: "pending"
-    })
+  userId: userId,
+  tableId: table._id,
+  startTime: new Date(startTime),
+  endTime: new Date(endTime),
+  status: "pending_payment",
+  paymentStatus: "unpaid"
+})
 
     await booking.save()
 
