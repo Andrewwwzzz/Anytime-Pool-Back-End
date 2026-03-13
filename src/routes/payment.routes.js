@@ -138,9 +138,41 @@ router.get("/verify-session", async (req, res) => {
 
     }
 
-    res.json({
-      status: booking.status,
-      paymentStatus: booking.paymentStatus
+    /*
+    If booking expired
+    */
+    if (booking.expiresAt < new Date()) {
+
+      return res.json({
+        status: "expired"
+      })
+
+    }
+
+    /*
+    If webhook already confirmed booking
+    */
+    if (booking.paymentStatus === "paid") {
+
+      return res.json({
+        status: "confirmed"
+      })
+
+    }
+
+    /*
+    Payment completed but webhook still processing
+    */
+    if (session.payment_status === "paid") {
+
+      return res.json({
+        status: "processing"
+      })
+
+    }
+
+    return res.json({
+      status: booking.status
     })
 
   } catch (error) {
