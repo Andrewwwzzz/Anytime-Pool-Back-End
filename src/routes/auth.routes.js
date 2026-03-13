@@ -1,10 +1,9 @@
-const express = require("express")
-const router = express.Router()
+import express from "express";
+import { singpassLogin } from "../controllers/auth.controller.js";
 
-const authController = require("../controllers/auth.controller")
+const router = express.Router();
 
-router.get("/singpass", authController.redirectToSingpass)
+// Start Singpass login
+router.get("/singpass", singpassLogin);
 
-router.get("/callback", authController.singpassCallback)
-
-module.exports = router
+export default router;
