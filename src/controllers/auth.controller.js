@@ -10,7 +10,7 @@ const jwt = require("jsonwebtoken");
 const clientId = process.env.SINGPASS_CLIENT_ID;
 const redirectUri = process.env.SINGPASS_REDIRECT_URI;
 
-const ISSUER = "https://stg-id.singpass.gov.sg";
+const ISSUER = "https://stg-id.singpass.gov.sg/fapi";
 
 const SIGNING_PRIVATE_KEY = process.env.SIGNING_PRIVATE_KEY
   ? process.env.SIGNING_PRIVATE_KEY.replace(/\\n/g, "\n")
@@ -141,7 +141,7 @@ exports.redirectToSingpass = async (req, res) => {
         response_type: "code",
         client_id: clientId,
         redirect_uri: redirectUri,
-        scope: "openid name dob",
+        scope: "openid name dob user.identity",
         state,
         nonce,
         code_challenge: codeChallenge,
@@ -158,7 +158,6 @@ exports.redirectToSingpass = async (req, res) => {
       {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Bearer ${clientAssertion}`,
           DPoP: dpopProof
         }
       }
@@ -214,7 +213,6 @@ exports.singpassCallback = async (req, res) => {
       {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Bearer ${clientAssertion}`,
           DPoP: dpopProof
         }
       }

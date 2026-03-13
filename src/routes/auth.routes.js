@@ -3,10 +3,16 @@ const router = express.Router();
 
 const authController = require("../controllers/auth.controller");
 
-// Step 1: Redirect to Singpass (Triggers PAR)
+/*
+  Step 1
+  Trigger Singpass QR login
+*/
 router.get("/singpass", authController.redirectToSingpass);
 
-// Step 2: Callback from Singpass after login
+/*
+  Step 2
+  Singpass callback after login
+*/
 router.get("/callback", authController.singpassCallback);
 
 module.exports = router;
