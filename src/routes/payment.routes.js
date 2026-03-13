@@ -109,6 +109,55 @@ router.post("/create-checkout", async (req, res) => {
 
 
 /*
+VERIFY STRIPE SESSION
+Used by frontend after redirect
+*/
+router.get("/verify-session", async (req, res) => {
+
+  try {
+
+    const { session_id } = req.query
+
+    if (!session_id) {
+      return res.status(400).json({
+        error: "Missing session_id"
+      })
+    }
+
+    const session = await stripe.checkout.sessions.retrieve(session_id)
+
+    const bookingId = session.metadata.bookingId
+
+    const booking = await Booking.findById(bookingId)
+
+    if (!booking) {
+
+      return res.json({
+        status: "not_found"
+      })
+
+    }
+
+    res.json({
+      status: booking.status,
+      paymentStatus: booking.paymentStatus
+    })
+
+  } catch (error) {
+
+    console.log("Verify session error:", error)
+
+    res.status(500).json({
+      error: "Verification failed"
+    })
+
+  }
+
+})
+
+
+
+/*
 STRIPE WEBHOOK
 */
 router.post("/webhook", async (req, res) => {
