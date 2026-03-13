@@ -10,6 +10,9 @@ const paymentRoutes = require("./routes/payment.routes")
 const authRoutes = require("./routes/auth.routes")
 const jwksRoutes = require("./routes/jwks.routes")
 
+/* NEW TEST ROUTE */
+const singpassTestRoutes = require("./routes/singpass.test.routes")
+
 const app = express()
 
 /*
@@ -41,7 +44,12 @@ JWKS endpoint
 app.use("/", jwksRoutes)
 
 /*
-Routes
+Singpass test endpoint
+*/
+app.use("/api", singpassTestRoutes)
+
+/*
+Application routes
 */
 app.use("/api/bookings", bookingRoutes)
 app.use("/api/payments", paymentRoutes)
