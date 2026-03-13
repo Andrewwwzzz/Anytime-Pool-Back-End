@@ -161,7 +161,8 @@ exports.redirectToSingpass = async (req, res) => {
     const requestUri = parResponse.data.request_uri;
 
     const authUrl =
-`${AUTH_ENDPOINT}?client_id=${clientId}&request_uri=${requestUri}&nonce=${req.session.nonce}`;
+`${AUTH_ENDPOINT}?client_id=${clientId}&request_uri=${requestUri}`;
+
 
 
 
