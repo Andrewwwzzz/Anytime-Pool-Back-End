@@ -128,7 +128,7 @@ exports.redirectToSingpass = async (req, res) => {
       response_type: "code",
       client_id: clientId,
       redirect_uri: redirectUri,
-      scope: "openid name dob user.identity",
+      scope: "openid user.identity name dob",
       state,
       nonce,
       code_challenge: challenge,
