@@ -7,20 +7,24 @@ const tableSchema = new mongoose.Schema(
       required: true,
       unique: true
     },
+
     name: {
       type: String,
       required: true
     },
+
     basePrice: {
       type: Number,
       required: true
     },
+
     isActive: {
       type: Boolean,
       default: true
     },
-    hardwareId: {
-      type: String // For future light/lock API mapping
+
+    hardware_id: {
+      type: String
     }
   },
   { timestamps: true }

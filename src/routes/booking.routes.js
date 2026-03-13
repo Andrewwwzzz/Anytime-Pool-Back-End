@@ -17,7 +17,7 @@ router.post("/create", async (req, res) => {
 
     console.log("BOOKING REQUEST:", req.body)
 
-    if (!userId | !tableId | !sessionId) {
+    if (!userId || !tableId || !sessionId) {
 
       return res.status(400).json({
         error: "Missing required fields"
@@ -103,7 +103,8 @@ router.get("/availability", async (req, res) => {
     const { sessionId } = req.query
 
     const bookings = await Booking.find({
-      sessionId
+      sessionId,
+      status: { $in: ["pending_payment", "confirmed"] }
     }).populate("tableId")
 
     const result = bookings.map(b => ({

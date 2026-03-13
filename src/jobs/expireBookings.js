@@ -5,18 +5,17 @@ cron.schedule("* * * * *", async () => {
 
   try {
 
-    const result = await Booking.updateMany(
+    const now = new Date()
 
+    const result = await Booking.updateMany(
       {
         status: "pending_payment",
-        expiresAt: { $lt: new Date() }
+        expiresAt: { $lt: now }
       },
-
       {
         status: "expired",
         paymentLock: false
       }
-
     )
 
     if (result.modifiedCount > 0) {

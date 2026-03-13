@@ -9,7 +9,8 @@ const BookingSchema = new mongoose.Schema({
 
   tableId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true
+    required: true,
+    ref: "Table"
   },
 
   sessionId: {
@@ -41,9 +42,18 @@ const BookingSchema = new mongoose.Schema({
 }, { timestamps: true })
 
 
+/*
+Only enforce uniqueness for active bookings
+Expired bookings will not block the table
+*/
 BookingSchema.index(
   { tableId: 1, sessionId: 1 },
-  { unique: true }
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: { $in: ["pending_payment", "confirmed"] }
+    }
+  }
 )
 
 module.exports = mongoose.model("Booking", BookingSchema)
