@@ -4,3 +4,4 @@
 *.p12
 keys/
 .env
+node_modules
