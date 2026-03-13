@@ -135,19 +135,21 @@ exports.redirectToSingpass = async (req, res) => {
     const parResponse = await axios.post(
       PAR_ENDPOINT,
       qs.stringify({
-        response_type: "code",
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        scope: "openid name email mobileno",
-        state,
-        nonce,
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-        client_assertion_type:
-          "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-        client_assertion: clientAssertion,
-        authentication_context_type: "login"
-      }),
+  response_type: "code",
+  client_id: clientId,
+  redirect_uri: redirectUri,
+  scope: "openid name dob",
+  state,
+  nonce,
+  code_challenge: codeChallenge,
+  code_challenge_method: "S256",
+
+  client_assertion_type:
+    "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+  client_assertion: clientAssertion,
+
+  authentication_context_class_reference: "urn:singpass:loa:2"
+}),
       {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
