@@ -1,18 +1,10 @@
-const express = require("express");
-const router = express.Router();
+const express = require("express")
+const router = express.Router()
 
-const authController = require("../controllers/auth.controller");
+const authController = require("../controllers/auth.controller")
 
-/*
-  Step 1
-  Trigger Singpass QR login
-*/
-router.get("/singpass", authController.redirectToSingpass);
+router.get("/singpass", authController.redirectToSingpass)
 
-/*
-  Step 2
-  Singpass callback after login
-*/
-router.get("/callback", authController.singpassCallback);
+router.get("/callback", authController.singpassCallback)
 
-module.exports = router;
+module.exports = router
