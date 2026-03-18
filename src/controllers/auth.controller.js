@@ -17,7 +17,10 @@ const DPOP_PRIVATE_KEY = process.env.DPOP_PRIVATE_KEY.replace(/\\n/g, "\n");
 const DPOP_PUBLIC_X = process.env.DPOP_PUBLIC_X;
 const DPOP_PUBLIC_Y = process.env.DPOP_PUBLIC_Y;
 
-/* HELPERS */
+/* =========================
+   HELPERS
+========================= */
+
 function base64url(input) {
   return Buffer.from(input)
     .toString("base64")
@@ -34,12 +37,16 @@ function generateCodeChallenge(verifier) {
   return base64url(crypto.createHash("sha256").update(verifier).digest());
 }
 
+/* =========================
+   CLIENT ASSERTION
+========================= */
+
 function generateClientAssertion() {
   return jwt.sign(
     {
       iss: CLIENT_ID,
       sub: CLIENT_ID,
-      aud: "https://stg-id.singpass.gov.sg/fapi", // 🔥 FIXED
+      aud: "https://stg-id.singpass.gov.sg/fapi",
       jti: crypto.randomUUID(),
       exp: Math.floor(Date.now() / 1000) + 300
     },
@@ -50,6 +57,10 @@ function generateClientAssertion() {
     }
   );
 }
+
+/* =========================
+   🔥 FIXED DPoP (IMPORTANT)
+========================= */
 
 function generateDPoP(url, method) {
   return jwt.sign(
@@ -64,6 +75,7 @@ function generateDPoP(url, method) {
       algorithm: "ES256",
       header: {
         typ: "dpop+jwt",
+        alg: "ES256",
         jwk: {
           kty: "EC",
           crv: "P-256",
@@ -75,7 +87,10 @@ function generateDPoP(url, method) {
   );
 }
 
-/* LOGIN */
+/* =========================
+   LOGIN (PAR)
+========================= */
+
 exports.redirectToSingpass = async (req, res) => {
   try {
     const state = crypto.randomBytes(16).toString("hex");
@@ -88,7 +103,7 @@ exports.redirectToSingpass = async (req, res) => {
     req.session.nonce = nonce;
     req.session.codeVerifier = codeVerifier;
 
-    const clientAssertion = generateClientAssertion(PAR_ENDPOINT);
+    const clientAssertion = generateClientAssertion();
 
     const payload = qs.stringify({
       response_type: "code",
@@ -108,6 +123,9 @@ exports.redirectToSingpass = async (req, res) => {
 
     const dpop = generateDPoP(PAR_ENDPOINT, "POST");
 
+    console.log("DPoP HEADER:", jwt.decode(dpop, { complete: true }));
+    console.log("CLIENT ASSERTION:", jwt.decode(clientAssertion));
+
     const parRes = await axios.post(PAR_ENDPOINT, payload, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -122,12 +140,15 @@ exports.redirectToSingpass = async (req, res) => {
     res.redirect(authUrl);
 
   } catch (err) {
-    console.error("PAR ERROR:", err.response?.data || err);
+    console.error("PAR ERROR FULL:", err.response?.data || err);
     res.status(500).json({ error: "Singpass login failed" });
   }
 };
 
-/* CALLBACK */
+/* =========================
+   CALLBACK
+========================= */
+
 exports.singpassCallback = async (req, res) => {
   try {
     const { code, state } = req.query;
@@ -136,7 +157,7 @@ exports.singpassCallback = async (req, res) => {
       return res.status(400).json({ error: "Invalid state" });
     }
 
-    const clientAssertion = generateClientAssertion(TOKEN_ENDPOINT);
+    const clientAssertion = generateClientAssertion();
 
     const payload = qs.stringify({
       grant_type: "authorization_code",
