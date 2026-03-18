@@ -148,7 +148,7 @@ exports.redirectToSingpass = async (req, res) => {
         client_assertion: clientAssertion,
 
         // ✅ ONLY REQUIRED Singpass param
-        authentication_context_type: "APP_AUTHENTICATION_DEFAULT"
+        authentication_context_type: "APP_AUTHENTICATION_QR"
       }),
       {
         headers: {
