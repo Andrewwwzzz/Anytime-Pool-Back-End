@@ -23,15 +23,13 @@ const DPOP_PRIVATE_KEY = process.env.DPOP_PRIVATE_KEY
   : null;
 
 /* ===============================
-   ENDPOINTS (FIXED)
+   ENDPOINTS
 ================================ */
 
 const AUTH_BASE = "https://stg-id.singpass.gov.sg/fapi";
 
 const PAR_ENDPOINT = `${AUTH_BASE}/par`;
 const TOKEN_ENDPOINT = `${AUTH_BASE}/token`;
-
-// ✅ FIXED (was /auth before)
 const AUTH_ENDPOINT = "https://stg-id.singpass.gov.sg/authorize";
 
 /* ===============================
@@ -115,7 +113,7 @@ function generateDpopProof(url, method) {
 }
 
 /* ===============================
-   STEP 1: PAR (FIXED)
+   STEP 1: PAR (FINAL FIXED)
 ================================ */
 
 exports.redirectToSingpass = async (req, res) => {
@@ -139,12 +137,11 @@ exports.redirectToSingpass = async (req, res) => {
         response_type: "code",
         client_id: clientId,
         redirect_uri: redirectUri,
-
-        // ✅ FIXED (removed user.identity)
         scope: "openid name dob",
 
         state,
         nonce,
+
         code_challenge: codeChallenge,
         code_challenge_method: "S256",
 
@@ -153,8 +150,11 @@ exports.redirectToSingpass = async (req, res) => {
 
         client_assertion: clientAssertion,
 
-        // ✅ FIXED (correct param)
-        authentication_context_type: "APP_AUTHENTICATION_DEFAULT"
+        // ✅ CORRECT ENUM
+        authentication_context_type: "APP_AUTHENTICATION_DEFAULT",
+
+        // 🔥 REQUIRED IN PRACTICE
+        authentication_context_message: "Login to Anytime Pool"
       }),
       {
         headers: {
