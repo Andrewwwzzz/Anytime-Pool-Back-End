@@ -7,7 +7,7 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const Booking = require("../models/Booking");
 
 /*
-CREATE STRIPE CHECKOUT
+CREATE CHECKOUT
 */
 router.post("/create-checkout", async (req, res) => {
   try {
@@ -19,26 +19,21 @@ router.post("/create-checkout", async (req, res) => {
         status: "pending_payment",
         paymentLock: false
       },
-      {
-        paymentLock: true
-      },
+      { paymentLock: true },
       { new: true }
     );
 
     if (!booking) {
       return res.status(409).json({
-        error: "This session has just been reserved by another user."
+        error: "Booking locked or invalid"
       });
     }
 
     if (booking.expiresAt < new Date()) {
-      await Booking.updateOne(
-        { _id: bookingId },
-        { paymentLock: false }
-      );
+      await Booking.updateOne({ _id: bookingId }, { paymentLock: false });
 
       return res.status(409).json({
-        error: "This session has just been reserved by another user."
+        error: "Booking expired"
       });
     }
 
@@ -50,9 +45,7 @@ router.post("/create-checkout", async (req, res) => {
         {
           price_data: {
             currency: "sgd",
-            product_data: {
-              name: "Pool Table Reservation"
-            },
+            product_data: { name: "Pool Table Booking" },
             unit_amount: amount
           },
           quantity: 1
@@ -75,12 +68,10 @@ router.post("/create-checkout", async (req, res) => {
       { stripeSessionId: session.id }
     );
 
-    res.json({
-      url: session.url
-    });
+    res.json({ url: session.url });
 
   } catch (err) {
-    console.log("Stripe checkout error:", err);
+    console.log(err);
 
     if (req.body.bookingId) {
       await Booking.updateOne(
@@ -89,73 +80,17 @@ router.post("/create-checkout", async (req, res) => {
       );
     }
 
-    res.status(500).json({
-      error: "Could not create checkout session"
-    });
+    res.status(500).json({ error: "Checkout failed" });
   }
 });
 
 /*
-VERIFY STRIPE SESSION
-*/
-router.get("/verify-session", async (req, res) => {
-  try {
-    const { session_id } = req.query;
-
-    if (!session_id) {
-      return res.status(400).json({
-        error: "Missing session_id"
-      });
-    }
-
-    const session = await stripe.checkout.sessions.retrieve(session_id);
-
-    const bookingId = session.metadata.bookingId;
-    const booking = await Booking.findById(bookingId);
-
-    if (!booking) return res.json({ status: "not_found" });
-
-    if (booking.status === "expired") return res.json({ status: "expired" });
-
-    if (booking.paymentStatus === "paid") return res.json({ status: "confirmed" });
-
-    if (session.payment_status === "paid") {
-      if (booking.expiresAt < new Date()) {
-        return res.json({ status: "expired" });
-      }
-      return res.json({ status: "processing" });
-    }
-
-    return res.json({ status: booking.status });
-
-  } catch (error) {
-    console.log("Verify session error:", error);
-    res.status(500).json({ error: "Verification failed" });
-  }
-});
-
-/*
-STRIPE WEBHOOK
+WEBHOOK
 */
 router.post("/webhook", async (req, res) => {
 
-  let event;
-
   try {
-    const sig = req.headers["stripe-signature"];
-
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-
-  } catch (err) {
-    console.log("Webhook verification failed:", err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  try {
+    const event = req.body;
 
     if (event.type === "checkout.session.completed") {
 
@@ -172,45 +107,31 @@ router.post("/webhook", async (req, res) => {
 
       if (booking.expiresAt < new Date()) {
 
-        await stripe.refunds.create({
-          payment_intent: session.payment_intent
-        });
-
         await Booking.updateOne(
           { _id: bookingId },
-          {
-            status: "expired",
-            paymentLock: false
-          }
+          { status: "expired", paymentLock: false }
         );
 
         return res.json({ received: true });
       }
 
-      // 🔥 SET SESSION TIME HERE
-      const now = new Date();
-
-      // Example: 1 hour session
-      const durationMs = 60 * 60 * 1000;
-
+      // 🔥 ONLY CONFIRM (NO TIME OVERRIDE)
       await Booking.updateOne(
         { _id: bookingId },
         {
           status: "confirmed",
           paymentStatus: "paid",
-          paymentLock: false,
-          startTime: now,
-          endTime: new Date(now.getTime() + durationMs)
+          paymentLock: false
         }
       );
 
-      console.log("Booking confirmed & session started:", bookingId);
+      console.log("Booking confirmed:", bookingId);
     }
 
     res.json({ received: true });
 
   } catch (err) {
-    console.log("Webhook processing error:", err);
+    console.log(err);
     res.json({ received: true });
   }
 });

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
 
 const BookingSchema = new mongoose.Schema({
 
@@ -13,8 +13,19 @@ const BookingSchema = new mongoose.Schema({
     ref: "Table"
   },
 
-  sessionId: {
-    type: String,
+  // 🔥 TIME-BASED SYSTEM
+  startTime: {
+    type: Date,
+    required: true
+  },
+
+  endTime: {
+    type: Date,
+    required: true
+  },
+
+  duration: {
+    type: Number, // minutes
     required: true
   },
 
@@ -39,21 +50,13 @@ const BookingSchema = new mongoose.Schema({
 
   expiresAt: Date
 
-}, { timestamps: true })
-
+}, { timestamps: true });
 
 /*
-Unique booking per table per session
-Only applies to active bookings
+Prevent overlapping bookings
 */
 BookingSchema.index(
-  { tableId: 1, sessionId: 1 },
-  {
-    unique: true,
-    partialFilterExpression: {
-      status: { $in: ["pending_payment", "confirmed"] }
-    }
-  }
-)
+  { tableId: 1, startTime: 1, endTime: 1 }
+);
 
-module.exports = mongoose.model("Booking", BookingSchema)
+module.exports = mongoose.model("Booking", BookingSchema);
