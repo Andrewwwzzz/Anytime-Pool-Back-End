@@ -34,7 +34,7 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/tables", tableRoutes);
-const userRoutes = require("./routes/user.routes");
+app.use("/api/users", userRoutes);
 
 /*
 HEALTH
