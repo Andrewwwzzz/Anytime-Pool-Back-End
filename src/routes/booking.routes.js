@@ -10,7 +10,9 @@ const Table = require("../models/table");
 const User = require("../models/user");
 
 /*
+========================================
 COMMON VALIDATION
+========================================
 */
 async function validateBooking({ tableId, startTime, duration }) {
 
@@ -42,9 +44,9 @@ async function validateBooking({ tableId, startTime, duration }) {
 }
 
 /*
-==============================
+========================================
 STRIPE FLOW
-==============================
+========================================
 */
 router.post("/create-with-payment", async (req, res) => {
   try {
@@ -105,9 +107,9 @@ router.post("/create-with-payment", async (req, res) => {
 });
 
 /*
-==============================
-WALLET FLOW (NEW)
-==============================
+========================================
+WALLET FLOW (TRANSACTION SAFE)
+========================================
 */
 router.post("/create-with-wallet", async (req, res) => {
 
@@ -128,7 +130,7 @@ router.post("/create-with-wallet", async (req, res) => {
     }
 
     /*
-    🔒 Deduct balance
+    🔒 Deduct wallet
     */
     user.walletBalance -= totalPrice;
     await user.save({ session });
@@ -147,6 +149,9 @@ router.post("/create-with-wallet", async (req, res) => {
       paymentLock: false
     }], { session });
 
+    /*
+    ✅ Commit
+    */
     await session.commitTransaction();
     session.endSession();
 
@@ -162,6 +167,70 @@ router.post("/create-with-wallet", async (req, res) => {
 
     res.status(400).json({
       error: error.message
+    });
+  }
+});
+
+/*
+========================================
+GET ALL BOOKINGS (FOR FRONTEND)
+========================================
+*/
+router.get("/", async (req, res) => {
+  try {
+
+    const bookings = await Booking.find({})
+      .populate("tableId")
+      .sort({ startTime: 1 });
+
+    res.json(bookings);
+
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to fetch bookings"
+    });
+  }
+});
+
+/*
+========================================
+AVAILABILITY
+========================================
+*/
+router.get("/availability", async (req, res) => {
+  try {
+
+    const { startTime, endTime } = req.query;
+
+    if (!startTime || !endTime) {
+      return res.status(400).json({
+        error: "Missing time range"
+      });
+    }
+
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    const bookings = await Booking.find({
+      status: { $in: ["pending_payment", "confirmed"] },
+      $or: [
+        { startTime: { $lt: end, $gte: start } },
+        { endTime: { $gt: start, $lte: end } },
+        { startTime: { $lte: start }, endTime: { $gte: end } }
+      ]
+    }).populate("tableId");
+
+    const result = bookings.map(b => ({
+      tableId: b.tableId.hardware_id,
+      startTime: b.startTime,
+      endTime: b.endTime
+    }));
+
+    res.json(result);
+
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to fetch availability"
     });
   }
 });
