@@ -26,10 +26,10 @@ router.post("/create", async (req, res) => {
       });
     }
 
-    const start = new Date(startTime);
+    const start = new Date(startTime); // SG time
     const end = new Date(start.getTime() + duration * 60 * 1000);
 
-    // 🔥 CHECK OVERLAP
+    // Overlap check
     const conflict = await Booking.findOne({
       tableId: table._id,
       status: { $in: ["pending_payment", "confirmed"] },
@@ -79,18 +79,12 @@ router.post("/create", async (req, res) => {
 });
 
 /*
-AVAILABILITY CHECK
+AVAILABILITY
 */
 router.get("/availability", async (req, res) => {
   try {
 
     const { startTime, endTime } = req.query;
-
-    if (!startTime || !endTime) {
-      return res.status(400).json({
-        error: "Missing time range"
-      });
-    }
 
     const start = new Date(startTime);
     const end = new Date(endTime);
@@ -113,13 +107,9 @@ router.get("/availability", async (req, res) => {
     res.json(result);
 
   } catch (error) {
-
-    console.log("Availability error:", error);
-
     res.status(500).json({
       error: "Failed to fetch availability"
     });
-
   }
 });
 

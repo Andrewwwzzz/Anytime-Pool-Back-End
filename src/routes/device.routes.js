@@ -4,9 +4,6 @@ const router = express.Router();
 const Table = require("../models/table");
 const Booking = require("../models/Booking");
 
-/*
-MANUAL CONTROL
-*/
 router.post("/control/:hardwareId", async (req, res) => {
   try {
     const { hardwareId } = req.params;
@@ -35,9 +32,6 @@ router.post("/control/:hardwareId", async (req, res) => {
   }
 });
 
-/*
-CLEAR MANUAL OVERRIDE
-*/
 router.post("/clear/:hardwareId", async (req, res) => {
   try {
     const { hardwareId } = req.params;
@@ -61,12 +55,11 @@ router.post("/clear/:hardwareId", async (req, res) => {
   }
 });
 
-/*
-DEVICE POLLING (TIME-BASED)
-*/
 router.get("/:hardwareId", async (req, res) => {
   try {
     const { hardwareId } = req.params;
+
+    const now = new Date(); // SG time (via TZ)
 
     const table = await Table.findOne({ hardware_id: hardwareId });
 
@@ -74,42 +67,20 @@ router.get("/:hardwareId", async (req, res) => {
       return res.json({ state: "OFF" });
     }
 
-    // 🔥 PRIORITY 1: Manual override
-    if (table.manualOverride === "ON") {
-      return res.json({ state: "ON" });
-    }
+    // Manual override
+    if (table.manualOverride === "ON") return res.json({ state: "ON" });
+    if (table.manualOverride === "OFF") return res.json({ state: "OFF" });
 
-    if (table.manualOverride === "OFF") {
-      return res.json({ state: "OFF" });
-    }
-
-    // 🔥 PRIORITY 2: TIME-BASED BOOKING
-
-    // 🇸🇬 Convert NOW to Singapore time
-    const now = new Date();
-    const sgNow = new Date(now.getTime() + (8 * 60 * 60 * 1000));
-
+    // Booking check
     const booking = await Booking.findOne({
       tableId: table._id,
       status: "confirmed",
       paymentStatus: "paid"
     }).sort({ createdAt: -1 });
 
-    if (!booking || !booking.startTime || !booking.endTime) {
-      return res.json({ state: "OFF" });
-    }
+    if (!booking) return res.json({ state: "OFF" });
 
-    // 🇸🇬 Convert booking times to SG time
-    const startTime = new Date(new Date(booking.startTime).getTime() + (8 * 60 * 60 * 1000));
-    const endTime = new Date(new Date(booking.endTime).getTime() + (8 * 60 * 60 * 1000));
-
-    // 🔍 Debug logs
-    console.log("SG NOW:", sgNow);
-    console.log("START:", startTime);
-    console.log("END:", endTime);
-
-    // 🔥 FINAL CHECK
-    if (sgNow >= startTime && sgNow <= endTime) {
+    if (now >= booking.startTime && now <= booking.endTime) {
       return res.json({ state: "ON" });
     }
 

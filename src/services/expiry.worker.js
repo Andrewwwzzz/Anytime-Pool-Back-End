@@ -1,17 +1,13 @@
-const Booking = require("../models/booking");
+const Booking = require("../models/Booking");
 
 let isRunning = false;
 
 async function expireBookings() {
-  if (isRunning) {
-    console.log("Expiry worker skipped (still running)");
-    return;
-  }
-
+  if (isRunning) return;
   isRunning = true;
 
   try {
-    const now = new Date();
+    const now = new Date(); // SG time
 
     const result = await Booking.updateMany(
       {
@@ -36,8 +32,6 @@ async function expireBookings() {
 
 function startExpiryWorker() {
   console.log("Expiry worker started");
-
-  // Run every 1 minute
   setInterval(expireBookings, 60 * 1000);
 }
 
