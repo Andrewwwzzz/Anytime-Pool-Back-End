@@ -7,22 +7,21 @@ const app = express();
 
 /*
 ========================================
-CORS CONFIG (PRODUCTION SAFE)
+🔥 SIMPLE + SAFE CORS (FIXED)
 ========================================
 */
-const allowedOrigins = [
-  "https://envopoolsg.com",
-  "https://www.envopoolsg.com",
-];
-
 app.use(cors({
-  origin: "*",
+  origin: true, // allow all dynamic origins
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// handle preflight requests
-app.options("*", cors());
+/*
+🔥 CRITICAL: HANDLE PREFLIGHT BEFORE ROUTES
+*/
+app.options("*", (req, res) => {
+  res.sendStatus(200);
+});
 
 /*
 ========================================
@@ -55,16 +54,12 @@ app.get("/health", (req, res) => {
 
 /*
 ========================================
-MONGODB CONNECTION
+MONGODB
 ========================================
 */
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB connected");
-  })
-  .catch(err => {
-    console.error("MongoDB connection error:", err);
-  });
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error("MongoDB error:", err));
 
 /*
 ========================================
