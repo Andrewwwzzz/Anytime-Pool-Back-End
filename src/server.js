@@ -5,15 +5,15 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const session = require("express-session");
 
-const bookingRoutes = require("../routes/booking.routes");
-const paymentRoutes = require("../routes/payment.routes");
+const bookingRoutes = require("./routes/booking.routes");
+const paymentRoutes = require("./routes/payment.routes");
 
 /* 🔥 DEVICE ROUTES */
-const deviceRoutes = require("../routes/device.routes");
+const deviceRoutes = require("./routes/device.routes");
 
 /* 🔥 MODELS */
-const Booking = require("../models/Booking");
-const Table = require("../models/table");
+const Booking = require("./models/Booking");
+const Table = require("./models/table");
 
 const app = express();
 
@@ -116,7 +116,7 @@ async function startServer() {
 
     console.log("MongoDB connected");
 
-    require("../jobs/expireBookings");
+    require("./jobs/expireBookings");
 
     const PORT = process.env.PORT || 3000;
 
