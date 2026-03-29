@@ -43,12 +43,19 @@ async function validateBooking({ userId, tableId, startTime, duration }) {
 }
 
 /*
-STRIPE
+STRIPE BOOKING
 */
 router.post("/create-with-payment", auth, async (req, res) => {
   try {
     const user = req.user;
     const userId = req.userId;
+
+    // 🔴 BLOCK HERE (NOT IN AUTH)
+    if (!user.isVerified) {
+      return res.status(403).json({
+        error: "Account not verified"
+      });
+    }
 
     const { tableId, startTime, duration, price } = req.body;
 
@@ -103,12 +110,13 @@ router.post("/create-with-payment", auth, async (req, res) => {
     });
 
   } catch (error) {
+    console.error("BOOKING ERROR:", error);
     res.status(400).json({ error: error.message });
   }
 });
 
 /*
-WALLET
+WALLET BOOKING
 */
 router.post("/create-with-wallet", auth, async (req, res) => {
 
@@ -118,6 +126,10 @@ router.post("/create-with-wallet", auth, async (req, res) => {
   try {
     const user = req.user;
     const userId = req.userId;
+
+    if (!user.isVerified) {
+      throw new Error("Account not verified");
+    }
 
     const { tableId, startTime, duration, price } = req.body;
 
@@ -153,6 +165,8 @@ router.post("/create-with-wallet", auth, async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
+
+    console.error("WALLET ERROR:", error);
 
     res.status(400).json({ error: error.message });
   }

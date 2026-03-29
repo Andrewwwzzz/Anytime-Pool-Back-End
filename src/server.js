@@ -6,71 +6,55 @@ require("dotenv").config();
 const app = express();
 
 /*
-========================================
-🔥 SIMPLE + SAFE CORS (FIXED)
-========================================
+CORS
 */
 app.use(cors({
-  origin: true, // allow all dynamic origins
+  origin: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-/*
-🔥 CRITICAL: HANDLE PREFLIGHT BEFORE ROUTES
-*/
-app.options("*", (req, res) => {
-  res.sendStatus(200);
-});
+app.options("*", (req, res) => res.sendStatus(200));
 
 /*
-========================================
 MIDDLEWARE
-========================================
 */
 app.use(express.json());
 
 /*
-========================================
 ROUTES
-========================================
 */
 const bookingRoutes = require("./routes/booking.routes");
 const authRoutes = require("./routes/auth.routes");
 const adminRoutes = require("./routes/admin.routes");
+const tableRoutes = require("./routes/table.routes");
 
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/tables", tableRoutes);
 
 /*
-========================================
-HEALTH CHECK
-========================================
+HEALTH
 */
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
 /*
-========================================
-MONGODB
-========================================
+MONGO
 */
 mongoose.connect(process.env.MONGO_URI, {
   serverSelectionTimeoutMS: 5000
 })
-.then(() => {
-  console.log("MongoDB connected");
-})
+.then(() => console.log("MongoDB connected"))
 .catch(err => {
   console.error("MongoDB connection error:", err);
-  process.exit(1); // 🔥 CRASH EARLY IF FAIL
+  process.exit(1);
 });
+
 /*
-========================================
-START SERVER
-========================================
+START
 */
 const PORT = process.env.PORT || 5000;
 

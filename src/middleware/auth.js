@@ -6,9 +6,7 @@ module.exports = async function (req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({
-        error: "Unauthorized"
-      });
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -18,17 +16,10 @@ module.exports = async function (req, res, next) {
     const user = await User.findById(decoded.id);
 
     if (!user) {
-      return res.status(401).json({
-        error: "User not found"
-      });
+      return res.status(401).json({ error: "User not found" });
     }
 
-    if (!user.isVerified) {
-      return res.status(403).json({
-        error: "Account not verified"
-      });
-    }
-
+    // ✅ DO NOT BLOCK UNVERIFIED USERS HERE
     req.user = user;
     req.userId = user._id;
 
@@ -36,8 +27,6 @@ module.exports = async function (req, res, next) {
 
   } catch (error) {
     console.error("AUTH ERROR:", error);
-    res.status(401).json({
-      error: "Invalid token"
-    });
+    return res.status(401).json({ error: "Invalid token" });
   }
 };
