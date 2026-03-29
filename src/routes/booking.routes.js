@@ -8,10 +8,9 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const Booking = require("../models/Booking");
 const Table = require("../models/table");
 const User = require("../models/user");
-const WalletTransaction = require("../models/walletTransaction");
 
 /*
-COMMON BOOKING VALIDATION
+COMMON VALIDATION
 */
 async function validateBooking({ tableId, startTime, duration }) {
 
@@ -43,81 +42,9 @@ async function validateBooking({ tableId, startTime, duration }) {
 }
 
 /*
-🔥 WALLET FLOW (TRANSACTION SAFE)
-*/
-router.post("/create-with-wallet", async (req, res) => {
-
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const { userId, tableId, startTime, duration } = req.body;
-
-    const { table, start, end, totalPrice } =
-      await validateBooking({ tableId, startTime, duration });
-
-    const user = await User.findById(userId).session(session);
-    if (!user) throw new Error("User not found");
-
-    if (user.walletBalance < totalPrice) {
-      throw new Error("Insufficient wallet balance");
-    }
-
-    /*
-    🔒 DEDUCT BALANCE
-    */
-    user.walletBalance -= totalPrice;
-    await user.save({ session });
-
-    /*
-    🔒 CREATE BOOKING
-    */
-    const booking = await Booking.create([{
-      userId,
-      tableId: table._id,
-      startTime: start,
-      endTime: end,
-      duration,
-      status: "confirmed",
-      paymentStatus: "paid",
-      paymentLock: false
-    }], { session });
-
-    /*
-    🧾 CREATE LEDGER RECORD
-    */
-    await WalletTransaction.create([{
-      userId,
-      bookingId: booking[0]._id,
-      amount: totalPrice,
-      type: "debit",
-      status: "completed"
-    }], { session });
-
-    /*
-    ✅ COMMIT EVERYTHING
-    */
-    await session.commitTransaction();
-    session.endSession();
-
-    res.json({
-      message: "Booking confirmed via wallet",
-      bookingId: booking[0]._id
-    });
-
-  } catch (error) {
-
-    await session.abortTransaction();
-    session.endSession();
-
-    res.status(400).json({
-      error: error.message
-    });
-  }
-});
-
-/*
-STRIPE FLOW (UNCHANGED SAFE)
+==============================
+STRIPE FLOW
+==============================
 */
 router.post("/create-with-payment", async (req, res) => {
   try {
@@ -174,6 +101,68 @@ router.post("/create-with-payment", async (req, res) => {
 
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+/*
+==============================
+WALLET FLOW (NEW)
+==============================
+*/
+router.post("/create-with-wallet", async (req, res) => {
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { userId, tableId, startTime, duration } = req.body;
+
+    const { table, start, end, totalPrice } =
+      await validateBooking({ tableId, startTime, duration });
+
+    const user = await User.findById(userId).session(session);
+    if (!user) throw new Error("User not found");
+
+    if (user.walletBalance < totalPrice) {
+      throw new Error("Insufficient wallet balance");
+    }
+
+    /*
+    🔒 Deduct balance
+    */
+    user.walletBalance -= totalPrice;
+    await user.save({ session });
+
+    /*
+    🔒 Create booking
+    */
+    const booking = await Booking.create([{
+      userId,
+      tableId: table._id,
+      startTime: start,
+      endTime: end,
+      duration,
+      status: "confirmed",
+      paymentStatus: "paid",
+      paymentLock: false
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({
+      message: "Booking confirmed via wallet",
+      bookingId: booking[0]._id
+    });
+
+  } catch (error) {
+
+    await session.abortTransaction();
+    session.endSession();
+
+    res.status(400).json({
+      error: error.message
+    });
   }
 });
 
