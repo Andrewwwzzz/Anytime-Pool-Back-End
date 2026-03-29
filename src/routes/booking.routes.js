@@ -27,14 +27,11 @@ async function validateBooking({ tableId, startTime, duration }) {
   if (!table) throw new Error("Table not found");
 
   const conflict = await Booking.findOne({
-    tableId: table._id,
-    status: { $in: ["pending_payment", "confirmed"] },
-    $or: [
-      { startTime: { $lt: end, $gte: start } },
-      { endTime: { $gt: start, $lte: end } },
-      { startTime: { $lte: start }, endTime: { $gte: end } }
-    ]
-  });
+  tableId: table._id,
+  status: { $in: ["pending_payment", "confirmed"] },
+  startTime: { $lt: end },
+  endTime: { $gt: start }
+});
 
   if (conflict) throw new Error("Time slot already booked");
 
