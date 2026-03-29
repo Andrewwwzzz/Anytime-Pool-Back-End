@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/user");
+const auth = require("../middleware/auth");
 
 /*
 ========================================
@@ -17,18 +18,12 @@ router.post("/register", async (req, res) => {
 
     const { name, email, password } = req.body;
 
-    /*
-    VALIDATION
-    */
     if (!name || !email || !password) {
       return res.status(400).json({
         error: "Missing name, email or password"
       });
     }
 
-    /*
-    CHECK EXISTING
-    */
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(400).json({
@@ -36,14 +31,8 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    /*
-    HASH PASSWORD
-    */
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    /*
-    CREATE USER
-    */
     const user = await User.create({
       name,
       email,
@@ -57,7 +46,7 @@ router.post("/register", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("REGISTER ERROR:", error); // 🔥 THIS IS KEY
+    console.error("REGISTER ERROR:", error);
 
     res.status(500).json({
       error: "Register failed"
@@ -107,8 +96,11 @@ router.post("/login", async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        email: user.email,
         isVerified: user.isVerified,
-        role: user.role
+        role: user.role,
+        showName: user.showName,
+        walletBalance: user.walletBalance
       }
     });
 
@@ -117,6 +109,37 @@ router.post("/login", async (req, res) => {
 
     res.status(500).json({
       error: "Login failed"
+    });
+  }
+});
+
+/*
+========================================
+GET CURRENT USER (SYNC)
+========================================
+*/
+router.get("/me", auth, async (req, res) => {
+  try {
+
+    const user = req.user;
+
+    res.json({
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isVerified: user.isVerified,
+        role: user.role,
+        showName: user.showName,
+        walletBalance: user.walletBalance
+      }
+    });
+
+  } catch (error) {
+    console.error("ME ERROR:", error);
+
+    res.status(500).json({
+      error: "Failed to fetch user"
     });
   }
 });
