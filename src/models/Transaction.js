@@ -1,29 +1,42 @@
 const mongoose = require("mongoose");
 
-const transactionSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+const transactionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-  type: {
-    type: String,
-    enum: ["wallet_topup", "wallet_deduct", "admin_adjustment"],
-    required: true
+    bookingId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Booking",
+    },
+
+    amount: {
+      type: Number,
+      required: true,
+    },
+
+    type: {
+      type: String,
+      enum: ["payment", "refund", "topup"],
+      required: true,
+    },
+
+    method: {
+      type: String,
+      enum: ["wallet", "paynow"],
+      required: true,
+    },
+
+    status: {
+      type: String,
+      enum: ["pending", "success", "failed"],
+      default: "success",
+    },
   },
-
-  amount: { type: Number, required: true },
-
-  balanceAfter: { type: Number },
-
-  reference: {
-    type: String // e.g. bookingId / stripeSessionId
-  },
-
-  performedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  },
-
-  note: String
-
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("Transaction", transactionSchema);

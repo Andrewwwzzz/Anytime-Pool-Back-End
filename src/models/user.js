@@ -2,48 +2,18 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true
-    },
-
-    email: {
-      type: String,
-      required: true,
-      unique: true
-    },
-
-    password: {
-      type: String,
-      required: true
-    },
+    name: String,
+    email: String,
 
     walletBalance: {
       type: Number,
-      default: 0
+      default: 0,
     },
 
-    showName: {
-      type: Boolean,
-      default: true
+    totalSpent: {
+      type: Number,
+      default: 0,
     },
-
-    isVerified: {
-      type: Boolean,
-      default: false
-    },
-
-    verificationMethod: {
-      type: String,
-      enum: ["admin", "singpass", null],
-      default: null
-    },
-
-    role: {
-      type: String,
-      enum: ["user", "admin"],
-      default: "user"
-    }
   },
   { timestamps: true }
 );

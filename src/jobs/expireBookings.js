@@ -1,31 +1,45 @@
-const cron = require("node-cron")
-const Booking = require("../models/Booking")
+const Booking = require("../models/Booking");
+const { io } = require("../socket");
 
-cron.schedule("* * * * *", async () => {
+exports.startBookingExpiryJob = () => {
+  setInterval(async () => {
+    const now = new Date();
 
-  try {
+    const bookings = await Booking.find({
+      status: "pending_payment",
+      expiresAt: { $lt: now },
+    });
 
-    const now = new Date()
+    for (const booking of bookings) {
+      booking.status = "expired";
+      await booking.save();
 
-    const result = await Booking.updateMany(
-      {
-        status: "pending_payment",
-        expiresAt: { $lt: now }
-      },
-      {
+      io.emit("bookingUpdated", {
+        bookingId: booking._id,
         status: "expired",
-        paymentLock: false
-      }
-    )
-
-    if (result.modifiedCount > 0) {
-      console.log("Expired bookings:", result.modifiedCount)
+      });
     }
+  }, 30000);
+};const Booking = require("../models/Booking");
+const { io } = require("../socket");
 
-  } catch (error) {
+exports.startBookingExpiryJob = () => {
+  setInterval(async () => {
+    const now = new Date();
 
-    console.log("Expire booking error:", error)
+    const bookings = await Booking.find({
+      status: "pending_payment",
+      expiresAt: { $lt: now },
+    });
 
-  }
+    for (const booking of bookings) {
+      booking.status = "expired";
+      await booking.save();
 
-})
+      io.emit("bookingUpdated", {
+        bookingId: booking._id,
+        status: "expired",
+      });
+    }
+  }, 30000);
+};

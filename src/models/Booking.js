@@ -5,43 +5,49 @@ const bookingSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true
-    },
-
-    userName: {
-      type: String
+      required: true,
     },
 
     tableId: {
-  type: String, // ✅ NOT ObjectId anymore
-},
+      type: String, // hardware_id (NOT Mongo _id)
+      required: true,
+    },
 
-    startTime: Date,
-    endTime: Date,
-    duration: Number,
+    startTime: {
+      type: Date,
+      required: true,
+    },
 
-    price: Number,
+    endTime: {
+      type: Date,
+      required: true,
+    },
+
+    amount: {
+      type: Number,
+      required: true,
+    },
 
     status: {
       type: String,
       enum: ["pending_payment", "confirmed", "expired"],
-      default: "pending_payment"
+      default: "pending_payment",
     },
 
-    paymentStatus: {
+    paymentMethod: {
       type: String,
-      enum: ["unpaid", "paid"],
-      default: "unpaid"
+      enum: ["wallet", "paynow", null],
+      default: null,
     },
 
-    paymentLock: {
-      type: Boolean,
-      default: false
+    paidAt: {
+      type: Date,
     },
 
-    stripeSessionId: String,
-
-    expiresAt: Date
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
   },
   { timestamps: true }
 );

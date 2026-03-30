@@ -1,48 +1,97 @@
-const axios = require("axios");
-const Booking = require("../models/booking");
+const mongoose = require("mongoose");
+const Booking = require("../models/Booking");
+const User = require("../models/user");
+const Transaction = require("../models/Transaction");
+const BookingLog = require("../models/BookingLog");
 
-const createHitpayPayment = async (bookingId) => {
-  const booking = await Booking.findById(bookingId).populate("table");
+exports.confirmBookingPayment = async ({
+  bookingId,
+  paymentMethod,
+}) => {
+  const session = await mongoose.startSession();
 
-  if (!booking) {
-    throw new Error("Booking not found");
-  }
+  try {
+    session.startTransaction();
 
-  if (booking.status !== "pending") {
-    throw new Error("Booking already processed");
-  }
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) throw new Error("Booking not found");
 
-  const amount = booking.totalPrice;
-
-  const response = await axios.post(
-    "https://api.sandbox.hit-pay.com/v1/payment-requests",
-    {
-      amount: amount,
-      currency: "SGD",
-      email: "customer@email.com",
-      reference_number: booking._id.toString(),
-      redirect_url: `${process.env.FRONTEND_URL}/payment-success`,
-      webhook: `${process.env.BACKEND_URL}/api/payments/webhook`,
-      metadata: {
-        bookingId: booking._id.toString()
-      }
-    },
-    {
-      headers: {
-        "X-BUSINESS-API-KEY": process.env.HITPAY_API_KEY,
-        "Content-Type": "application/json"
-      }
+    if (booking.status === "confirmed") {
+      await session.commitTransaction();
+      return;
     }
-  );
 
-  booking.paymentId = response.data.id;
-  await booking.save();
+    const user = await User.findById(booking.userId).session(session);
 
-  return {
-    paymentUrl: response.data.url
-  };
+    booking.status = "confirmed";
+    booking.paymentMethod = paymentMethod;
+    booking.paidAt = new Date();
+
+    await booking.save({ session });
+
+    await Transaction.create([{
+      userId: user._id,
+      bookingId: booking._id,
+      amount: booking.amount,
+      type: "payment",
+      method: paymentMethod,
+      status: "success"
+    }], { session });
+
+    user.totalSpent += booking.amount;
+    await user.save({ session });
+
+    await BookingLog.create([{
+      bookingId: booking._id,
+      action: "confirmed",
+      performedBy: user._id
+    }], { session });
+
+    await session.commitTransaction();
+
+    return booking;
+
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
 };
 
-module.exports = {
-  createHitpayPayment
+exports.payWithWallet = async ({ bookingId }) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const booking = await Booking.findById(bookingId).session(session);
+    if (!booking) throw new Error("Booking not found");
+
+    if (booking.status !== "pending_payment") {
+      throw new Error("Invalid booking state");
+    }
+
+    const user = await User.findById(booking.userId).session(session);
+
+    if (user.walletBalance < booking.amount) {
+      throw new Error("Insufficient balance");
+    }
+
+    user.walletBalance -= booking.amount;
+    await user.save({ session });
+
+    await session.commitTransaction();
+
+    return await exports.confirmBookingPayment({
+      bookingId,
+      paymentMethod: "wallet"
+    });
+
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
 };
