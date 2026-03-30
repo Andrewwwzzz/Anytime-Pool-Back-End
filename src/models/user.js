@@ -2,43 +2,45 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-    },
+    name: String,
 
     email: {
       type: String,
       required: true,
       unique: true,
-      lowercase: true, // 🔥 normalize email
+      lowercase: true
     },
 
     password: {
       type: String,
-      required: true,
+      required: true
     },
 
     role: {
       type: String,
       enum: ["user", "admin"],
-      default: "user",
+      default: "user"
     },
 
     isVerified: {
       type: Boolean,
-      default: false,
+      default: false
     },
 
     walletBalance: {
       type: Number,
-      default: 0,
+      default: 0
+    },
+
+    points: {
+      type: Number,
+      default: 0
     },
 
     totalSpent: {
       type: Number,
-      default: 0,
-    },
+      default: 0
+    }
   },
   { timestamps: true }
 );

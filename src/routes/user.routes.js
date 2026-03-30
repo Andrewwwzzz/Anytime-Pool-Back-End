@@ -5,7 +5,7 @@ const User = require("../models/user");
 const Transaction = require("../models/Transaction");
 const AdminLog = require("../models/AdminLog");
 
-const auth = require("../middleware/auth");
+const auth = require("../middleware/auth.middleware");
 
 /*
 ADMIN CHECK
@@ -34,7 +34,7 @@ router.delete("/:id", auth, requireAdmin, async (req, res) => {
   await User.findByIdAndDelete(req.params.id);
 
   await AdminLog.create({
-    adminId: req.userId,
+    adminId: req.user.id,
     action: "delete_user",
     targetUserId: req.params.id
   });
@@ -45,42 +45,91 @@ router.delete("/:id", auth, requireAdmin, async (req, res) => {
 });
 
 /*
-UPDATE WALLET
+🔥 UPDATE WALLET + POINTS (NEW FLEXIBLE SYSTEM)
 */
 router.patch("/:id/wallet", auth, requireAdmin, async (req, res) => {
   const io = req.app.get("io");
 
-  const { amount } = req.body;
+  try {
+    const {
+      walletBalance,
+      walletDelta,
+      points,
+      pointsDelta
+    } = req.body;
 
-  const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id);
 
-  user.walletBalance += amount;
-  await user.save();
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
-  await Transaction.create({
-    userId: user._id,
-    type: "admin_adjustment",
-    amount,
-    balanceAfter: user.walletBalance,
-    performedBy: req.userId,
-    note: "Admin wallet update"
-  });
+    let walletChange = 0;
+    let pointsChange = 0;
 
-  await AdminLog.create({
-    adminId: req.userId,
-    action: "update_wallet",
-    targetUserId: user._id,
-    details: { amount }
-  });
+    // 💰 Wallet logic
+    if (walletBalance !== undefined) {
+      walletChange = walletBalance - user.walletBalance;
+      user.walletBalance = walletBalance;
+    }
 
-  // 🔥 REALTIME EVENTS
-  io.emit("users_updated");
-  io.emit("wallet_updated", { userId: user._id });
-  io.emit("transaction_updated");
+    if (walletDelta !== undefined) {
+      walletChange = walletDelta;
+      user.walletBalance += walletDelta;
+    }
 
-  res.json({
-    walletBalance: user.walletBalance
-  });
+    // ⭐ Points logic
+    if (points !== undefined) {
+      pointsChange = points - user.points;
+      user.points = points;
+    }
+
+    if (pointsDelta !== undefined) {
+      pointsChange = pointsDelta;
+      user.points += pointsDelta;
+    }
+
+    await user.save();
+
+    // 💰 Create transaction ONLY for wallet changes
+    if (walletChange !== 0) {
+      await Transaction.create({
+        userId: user._id,
+        amount: walletChange,
+        type: "topup",
+        method: "wallet",
+        status: "success"
+      });
+    }
+
+    // 🧾 Admin log
+    await AdminLog.create({
+      adminId: req.user.id,
+      action: "update_wallet_points",
+      targetUserId: user._id,
+      details: {
+        walletChange,
+        pointsChange
+      }
+    });
+
+    // ⚡ Realtime updates
+    io.emit("users_updated");
+    io.emit("walletUpdated", {
+      userId: user._id,
+      walletBalance: user.walletBalance,
+      points: user.points
+    });
+    io.emit("transaction_updated");
+
+    res.json({
+      walletBalance: user.walletBalance,
+      points: user.points
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
