@@ -1,24 +1,42 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
+
 require("dotenv").config();
 
 const app = express();
+const server = http.createServer(app);
 
 /*
-CORS
+SOCKET.IO
 */
-app.use(cors({
-  origin: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+const io = new Server(server, {
+  cors: {
+    origin: "*"
+  }
+});
 
-app.options("*", (req, res) => res.sendStatus(200));
+// 🔥 MAKE IO GLOBAL
+app.set("io", io);
+
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
 
 /*
 MIDDLEWARE
 */
+app.use(cors({
+  origin: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json());
 
 /*
@@ -29,37 +47,27 @@ const authRoutes = require("./routes/auth.routes");
 const adminRoutes = require("./routes/admin.routes");
 const tableRoutes = require("./routes/table.routes");
 const userRoutes = require("./routes/user.routes");
+const transactionRoutes = require("./routes/transaction.routes");
 
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/tables", tableRoutes);
 app.use("/api/users", userRoutes);
-
-/*
-HEALTH
-*/
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
-});
+app.use("/api/transactions", transactionRoutes);
 
 /*
 MONGO
 */
-mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 5000
-})
-.then(() => console.log("MongoDB connected"))
-.catch(err => {
-  console.error("MongoDB connection error:", err);
-  process.exit(1);
-});
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error(err));
 
 /*
 START
 */
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

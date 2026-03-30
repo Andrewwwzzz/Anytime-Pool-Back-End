@@ -7,6 +7,7 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 const Booking = require("../models/Booking");
 const Table = require("../models/table");
+const Transaction = require("../models/Transaction");
 const BookingLog = require("../models/BookingLog");
 
 const auth = require("../middleware/auth");
@@ -17,9 +18,8 @@ VALIDATION
 ========================================
 */
 async function validateBooking({ userId, tableId, startTime, duration }) {
-
   const start = new Date(startTime);
-  const end = new Date(start.getTime() + duration * 60 * 1000);
+  const end = new Date(start.getTime() + duration * 60000);
 
   const table = await Table.findOne({ hardware_id: tableId });
   if (!table) throw new Error("Table not found");
@@ -33,15 +33,6 @@ async function validateBooking({ userId, tableId, startTime, duration }) {
 
   if (conflict) throw new Error("Time slot already booked");
 
-  const existingPending = await Booking.findOne({
-    userId,
-    status: "pending_payment"
-  });
-
-  if (existingPending) {
-    throw new Error("You already have a pending booking");
-  }
-
   return { table, start, end };
 }
 
@@ -52,13 +43,13 @@ STRIPE BOOKING (PENDING)
 */
 router.post("/create-with-payment", auth, async (req, res) => {
   try {
+    const io = req.app.get("io");
+
     const user = req.user;
     const userId = req.userId;
 
     if (!user.isVerified) {
-      return res.status(403).json({
-        error: "Account not verified"
-      });
+      return res.status(403).json({ error: "Account not verified" });
     }
 
     const { tableId, startTime, duration, price } = req.body;
@@ -78,24 +69,12 @@ router.post("/create-with-payment", auth, async (req, res) => {
       price,
       status: "pending_payment",
       paymentStatus: "unpaid",
-      paymentLock: true,
       expiresAt
     });
 
     await booking.save();
 
-    /*
-    🔥 LOG: CREATED
-    */
-    await BookingLog.create({
-      bookingId: booking._id,
-      action: "created",
-      performedBy: userId
-    });
-
-    /*
-    🔥 LOG: PENDING
-    */
+    // 🔥 LOG
     await BookingLog.create({
       bookingId: booking._id,
       action: "pending_payment",
@@ -127,27 +106,30 @@ router.post("/create-with-payment", auth, async (req, res) => {
     booking.stripeSessionId = session.id;
     await booking.save();
 
+    io.emit("booking_updated");
+
     res.json({
       checkoutUrl: session.url
     });
 
   } catch (error) {
-    console.error("BOOKING ERROR:", error);
+    console.error("STRIPE ERROR:", error);
     res.status(400).json({ error: error.message });
   }
 });
 
 /*
 ========================================
-WALLET BOOKING (INSTANT CONFIRM)
+WALLET BOOKING (CONFIRMED)
 ========================================
 */
 router.post("/create-with-wallet", auth, async (req, res) => {
-
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
+    const io = req.app.get("io");
+
     const user = req.user;
     const userId = req.userId;
 
@@ -164,9 +146,11 @@ router.post("/create-with-wallet", auth, async (req, res) => {
       throw new Error("Insufficient wallet balance");
     }
 
+    // deduct wallet
     user.walletBalance -= price;
     await user.save({ session });
 
+    // create booking
     const booking = await Booking.create([{
       userId,
       userName: user.name,
@@ -179,26 +163,31 @@ router.post("/create-with-wallet", auth, async (req, res) => {
       paymentStatus: "paid"
     }], { session });
 
-    /*
-    🔥 LOG: CREATED
-    */
-    await BookingLog.create({
-      bookingId: booking[0]._id,
-      action: "created",
-      performedBy: userId
-    });
+    // 🔥 TRANSACTION LOG
+    await Transaction.create([{
+      userId: user._id,
+      type: "wallet_deduct",
+      amount: -price,
+      balanceAfter: user.walletBalance,
+      reference: booking[0]._id,
+      performedBy: user._id,
+      note: "Booking payment via wallet"
+    }], { session });
 
-    /*
-    🔥 LOG: CONFIRMED
-    */
-    await BookingLog.create({
+    // 🔥 BOOKING LOG
+    await BookingLog.create([{
       bookingId: booking[0]._id,
       action: "confirmed",
       performedBy: userId
-    });
+    }], { session });
 
     await session.commitTransaction();
     session.endSession();
+
+    // 🔥 REALTIME
+    io.emit("booking_updated");
+    io.emit("wallet_updated", { userId });
+    io.emit("transaction_updated");
 
     res.json({
       message: "Booking confirmed"
@@ -216,7 +205,7 @@ router.post("/create-with-wallet", auth, async (req, res) => {
 
 /*
 ========================================
-GET BOOKINGS (FOR FRONTEND)
+GET BOOKINGS (FOR UI)
 ========================================
 */
 router.get("/", async (req, res) => {
@@ -227,40 +216,6 @@ router.get("/", async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch bookings" });
-  }
-});
-
-/*
-========================================
-EXPIRE PENDING BOOKINGS (AUTO CLEANUP)
-========================================
-*/
-router.post("/expire-pending", async (req, res) => {
-  try {
-    const now = new Date();
-
-    const expired = await Booking.find({
-      status: "pending_payment",
-      expiresAt: { $lt: now }
-    });
-
-    for (const booking of expired) {
-      booking.status = "expired";
-      await booking.save();
-
-      await BookingLog.create({
-        bookingId: booking._id,
-        action: "expired"
-      });
-    }
-
-    res.json({
-      message: "Expired bookings cleaned",
-      count: expired.length
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: "Expire job failed" });
   }
 });
 

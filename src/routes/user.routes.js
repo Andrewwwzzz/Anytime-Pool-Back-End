@@ -7,6 +7,9 @@ const AdminLog = require("../models/AdminLog");
 
 const auth = require("../middleware/auth");
 
+/*
+ADMIN CHECK
+*/
 function requireAdmin(req, res, next) {
   if (req.user.role !== "admin") {
     return res.status(403).json({ error: "Admin only" });
@@ -26,6 +29,8 @@ router.get("/", auth, requireAdmin, async (req, res) => {
 DELETE USER
 */
 router.delete("/:id", auth, requireAdmin, async (req, res) => {
+  const io = req.app.get("io");
+
   await User.findByIdAndDelete(req.params.id);
 
   await AdminLog.create({
@@ -34,6 +39,8 @@ router.delete("/:id", auth, requireAdmin, async (req, res) => {
     targetUserId: req.params.id
   });
 
+  io.emit("users_updated");
+
   res.json({ message: "User deleted" });
 });
 
@@ -41,6 +48,8 @@ router.delete("/:id", auth, requireAdmin, async (req, res) => {
 UPDATE WALLET
 */
 router.patch("/:id/wallet", auth, requireAdmin, async (req, res) => {
+  const io = req.app.get("io");
+
   const { amount } = req.body;
 
   const user = await User.findById(req.params.id);
@@ -63,6 +72,11 @@ router.patch("/:id/wallet", auth, requireAdmin, async (req, res) => {
     targetUserId: user._id,
     details: { amount }
   });
+
+  // 🔥 REALTIME EVENTS
+  io.emit("users_updated");
+  io.emit("wallet_updated", { userId: user._id });
+  io.emit("transaction_updated");
 
   res.json({
     walletBalance: user.walletBalance
