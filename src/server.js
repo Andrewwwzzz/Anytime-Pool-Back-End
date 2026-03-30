@@ -48,6 +48,8 @@ const adminRoutes = require("./routes/admin.routes");
 const tableRoutes = require("./routes/table.routes");
 const userRoutes = require("./routes/user.routes");
 const transactionRoutes = require("./routes/transaction.routes");
+const logRoutes = require("./routes/log.routes");
+
 
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/auth", authRoutes);
@@ -55,6 +57,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/tables", tableRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api/logs", logRoutes);
 
 /*
 MONGO
