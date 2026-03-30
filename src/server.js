@@ -58,7 +58,7 @@ const tableRoutes = require("./routes/table.routes");
 const userRoutes = require("./routes/user.routes");
 const transactionRoutes = require("./routes/transaction.routes");
 const logRoutes = require("./routes/log.routes");
-const { startBookingExpiryJob } = require("./jobs/bookingExpiry");
+const { startBookingExpiryJob } = require("./jobs/expireBookings");
 
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
