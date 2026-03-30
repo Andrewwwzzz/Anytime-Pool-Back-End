@@ -1,11 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
+/*
+HEALTH CHECK
+*/
 router.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     status: "OK",
-    message: "Anytime Pool backend is working",
-    timestamp: new Date()
+    service: "Envo Pool API",
+    timestamp: new Date().toISOString()
   });
 });
 

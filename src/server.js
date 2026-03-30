@@ -23,20 +23,32 @@ io.on("connection", (socket) => {
 });
 
 /*
-MIDDLEWARE
+CORS
 */
 app.use(cors({
   origin: true,
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// 🔥 IMPORTANT for Stripe webhook
+/*
+🔥 HEALTH ROUTE (PUT EARLY — NO BODY PARSER ISSUES)
+*/
+const healthRoutes = require("./routes/health.routes");
+app.use("/health", healthRoutes);
+app.use("/api/health", healthRoutes);
+
+/*
+🔥 STRIPE WEBHOOK (RAW BODY ONLY FOR THIS ROUTE)
+*/
 app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
 
+/*
+JSON PARSER (AFTER webhook)
+*/
 app.use(express.json());
 
 /*
-ROUTES (CLEAN ARCHITECTURE)
+ROUTES
 */
 const bookingRoutes = require("./routes/booking.routes.new");
 const paymentRoutes = require("./routes/payment.routes.new");
@@ -57,6 +69,13 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/logs", logRoutes);
 
 /*
+DEBUG ROUTE (VERY IMPORTANT)
+*/
+app.get("/", (req, res) => {
+  res.send("API is running");
+});
+
+/*
 MONGO
 */
 mongoose.connect(process.env.MONGO_URI)
@@ -64,7 +83,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error(err));
 
 /*
-START
+START SERVER
 */
 const PORT = process.env.PORT || 5000;
 

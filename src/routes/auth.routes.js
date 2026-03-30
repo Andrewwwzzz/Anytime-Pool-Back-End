@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/user");
-const auth = require("../middleware/auth");
+const auth = require("../middleware/auth.middleware");
 
 /*
 ========================================
@@ -14,13 +14,15 @@ REGISTER
 */
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    let { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         error: "Missing name, email or password"
       });
     }
+
+    email = email.toLowerCase(); // 🔥 normalize
 
     const existing = await User.findOne({ email });
     if (existing) {
@@ -38,7 +40,7 @@ router.post("/register", async (req, res) => {
     });
 
     res.json({
-      message: "Account created. Await verification."
+      message: "Account created. Await admin verification."
     });
 
   } catch (error) {
@@ -52,12 +54,14 @@ router.post("/register", async (req, res) => {
 
 /*
 ========================================
-LOGIN (SEND FULL USER DATA)
+LOGIN
 ========================================
 */
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    email = email.toLowerCase(); // 🔥 normalize
 
     const user = await User.findOne({ email });
 
@@ -75,15 +79,16 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    // 🔥 include role in token
     const token = jwt.sign(
-      { id: user._id },
+      {
+        id: user._id,
+        role: user.role
+      },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
-    /*
-    🔥 SEND FULL USER DATA
-    */
     res.json({
       token,
       user: {
@@ -92,7 +97,6 @@ router.post("/login", async (req, res) => {
         email: user.email,
         role: user.role,
         isVerified: user.isVerified,
-        showName: user.showName,
         walletBalance: user.walletBalance
       }
     });
@@ -108,23 +112,15 @@ router.post("/login", async (req, res) => {
 
 /*
 ========================================
-GET CURRENT USER (ALWAYS FRESH)
+GET CURRENT USER
 ========================================
 */
 router.get("/me", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("-password");
+    const user = await User.findById(req.user.id).select("-password");
 
     res.json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        showName: user.showName,
-        walletBalance: user.walletBalance
-      }
+      user
     });
 
   } catch (error) {
