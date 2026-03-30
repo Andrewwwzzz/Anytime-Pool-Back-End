@@ -58,6 +58,7 @@ const tableRoutes = require("./routes/table.routes");
 const userRoutes = require("./routes/user.routes");
 const transactionRoutes = require("./routes/transaction.routes");
 const logRoutes = require("./routes/log.routes");
+const { startBookingExpiryJob } = require("./jobs/bookingExpiry");
 
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/payments", paymentRoutes);
@@ -67,6 +68,7 @@ app.use("/api/tables", tableRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/logs", logRoutes);
+startBookingExpiryJob();
 
 /*
 DEBUG ROUTE (VERY IMPORTANT)

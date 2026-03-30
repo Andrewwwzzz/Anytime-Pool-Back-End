@@ -4,36 +4,29 @@ const router = express.Router();
 const Booking = require("../models/Booking");
 const User = require("../models/user");
 
-const authMiddleware = require("../middleware/auth.middleware");
+const auth = require("../middleware/auth.middleware");
 
 /*
-🔒 CREATE BOOKING WITH:
-- verification check
-- table locking
+CREATE BOOKING
 */
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", auth, async (req, res) => {
   try {
     const { tableId, startTime, endTime, amount } = req.body;
 
     const user = await User.findById(req.user.id);
 
-    // 🔥 BLOCK unverified users
     if (!user.isVerified) {
-      return res.status(403).json({
-        error: "Account not verified"
-      });
+      return res.status(403).json({ error: "Account not verified" });
+    }
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
     }
 
     const start = new Date(startTime);
     const end = new Date(endTime);
 
-    if (start >= end) {
-      return res.status(400).json({
-        error: "Invalid time range"
-      });
-    }
-
-    // 🔒 LOCK overlapping bookings
+    // 🔒 prevent overlap
     const conflict = await Booking.findOne({
       tableId,
       status: { $in: ["pending_payment", "confirmed"] },
@@ -42,9 +35,7 @@ router.post("/", authMiddleware, async (req, res) => {
     });
 
     if (conflict) {
-      return res.status(409).json({
-        error: "Time slot already booked or reserved"
-      });
+      return res.status(409).json({ error: "Slot already booked" });
     }
 
     const booking = await Booking.create({
@@ -53,8 +44,7 @@ router.post("/", authMiddleware, async (req, res) => {
       startTime: start,
       endTime: end,
       amount,
-      status: "pending_payment",
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000)
     });
 
     res.json(booking);
@@ -65,10 +55,16 @@ router.post("/", authMiddleware, async (req, res) => {
 });
 
 /*
-GET BOOKINGS
+GET BOOKINGS + AUTO CLEAN
 */
 router.get("/", async (req, res) => {
+  await Booking.deleteMany({
+    status: "pending_payment",
+    expiresAt: { $lt: new Date() }
+  });
+
   const bookings = await Booking.find().sort({ createdAt: -1 });
+
   res.json(bookings);
 });
 

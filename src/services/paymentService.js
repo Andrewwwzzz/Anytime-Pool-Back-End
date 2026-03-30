@@ -2,12 +2,8 @@ const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const User = require("../models/user");
 const Transaction = require("../models/Transaction");
-const BookingLog = require("../models/BookingLog");
 
-exports.confirmBookingPayment = async ({
-  bookingId,
-  paymentMethod,
-}) => {
+exports.confirmBookingPayment = async ({ bookingId, paymentMethod }) => {
   const session = await mongoose.startSession();
 
   try {
@@ -22,10 +18,6 @@ exports.confirmBookingPayment = async ({
     }
 
     const user = await User.findById(booking.userId).session(session);
-    if (!user) throw new Error("User not found");
-
-    // 💰 Points
-    const pointsEarned = Math.round(booking.amount * 100);
 
     booking.status = "confirmed";
     booking.paymentMethod = paymentMethod;
@@ -43,15 +35,7 @@ exports.confirmBookingPayment = async ({
     }], { session });
 
     user.totalSpent += booking.amount;
-    user.points = (user.points || 0) + pointsEarned;
-
     await user.save({ session });
-
-    await BookingLog.create([{
-      bookingId: booking._id,
-      action: "confirmed",
-      performedBy: user._id
-    }], { session });
 
     await session.commitTransaction();
 
@@ -86,13 +70,11 @@ exports.payWithWallet = async ({ bookingId }) => {
       throw new Error("Insufficient balance");
     }
 
-    // 💸 Deduct wallet
     user.walletBalance -= booking.amount;
     await user.save({ session });
 
     await session.commitTransaction();
 
-    // 🔥 IMPORTANT: call AFTER commit (no shared session)
     return await exports.confirmBookingPayment({
       bookingId,
       paymentMethod: "wallet"

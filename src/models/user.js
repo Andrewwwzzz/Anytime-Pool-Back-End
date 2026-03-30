@@ -32,11 +32,6 @@ const userSchema = new mongoose.Schema(
       default: 0
     },
 
-    points: {
-      type: Number,
-      default: 0
-    },
-
     totalSpent: {
       type: Number,
       default: 0
