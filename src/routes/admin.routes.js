@@ -57,13 +57,55 @@ router.post("/verify-user", auth, requireAdmin, async (req, res) => {
 
 router.get("/stats", auth, requireAdmin, async (req, res) => {
   try {
-    const [totalUsers, totalBookings, revenueData, totalTransactions] = await Promise.all([
+    const now = new Date();
+    const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const fromDate = req.query.from ? new Date(req.query.from) : defaultFrom;
+    const toDate = req.query.to ? new Date(new Date(req.query.to).setHours(23, 59, 59)) : defaultTo;
+
+    const dateFilter = { createdAt: { $gte: fromDate, $lte: toDate } };
+
+    const [
+      totalUsers,
+      totalBookings,
+      revenueData,
+      totalTransactions,
+      topupData,
+      cancelledBookings,
+      pendingBookings
+    ] = await Promise.all([
       User.countDocuments(),
-      Booking.countDocuments({ status: "confirmed" }),
-      Booking.aggregate([{ $match: { status: "confirmed" } }, { $group: { _id: null, total: { $sum: "$amount" } } }]),
-      Transaction.countDocuments()
+      Booking.countDocuments({ status: "confirmed", ...dateFilter }),
+      Booking.aggregate([
+        { $match: { status: "confirmed", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+      Transaction.countDocuments(dateFilter),
+      Transaction.aggregate([
+        { $match: { type: "topup", ...dateFilter } },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+      Booking.countDocuments({ status: "cancelled", ...dateFilter }),
+      Booking.countDocuments({ status: "pending_payment", ...dateFilter })
     ]);
-    res.json({ totalUsers, totalBookings, totalRevenue: revenueData[0]?.total || 0, totalTransactions });
+
+    const totalRevenue = revenueData[0]?.total || 0;
+    const totalTopups = topupData[0]?.total || 0;
+    const avgBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
+
+    res.json({
+      totalUsers,
+      totalBookings,
+      totalRevenue,
+      totalTransactions,
+      totalTopups,
+      cancelledBookings,
+      pendingBookings,
+      avgBookingValue: parseFloat(avgBookingValue.toFixed(2)),
+      period: { from: fromDate, to: toDate }
+    });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
