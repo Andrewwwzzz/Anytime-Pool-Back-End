@@ -21,9 +21,17 @@ const bookingSchema = new mongoose.Schema(
       required: true
     },
 
+    // ✅ Full status enum — includes all possible states
     status: {
       type: String,
-      enum: ["pending_payment", "confirmed"],
+      enum: [
+        "pending_payment",  // created, waiting for payment
+        "confirmed",        // paid and confirmed
+        "cancelled",        // cancelled by user or admin
+        "expired",          // payment window passed
+        "completed",        // session finished
+        "refunded"          // payment refunded
+      ],
       default: "pending_payment"
     },
 
@@ -57,7 +65,7 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔒 prevent overlapping bookings
+// 🔒 prevent overlapping bookings for active statuses only
 bookingSchema.index(
   { tableId: 1, startTime: 1, endTime: 1 },
   {
