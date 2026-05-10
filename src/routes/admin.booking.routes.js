@@ -150,13 +150,26 @@ router.get("/customers/:userId/wallet", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Fetch all transaction types for this user
     const transactions = await Transaction.find({ userId: req.params.userId })
       .sort({ createdAt: -1 });
+
+    // Map to consistent format for frontend
+    const mapped = transactions.map(t => ({
+      _id: t._id,
+      type: t.type,
+      amount: Math.abs(t.amount),
+      direction: t.type === "topup" ? "credit" : "debit",
+      method: t.method,
+      status: t.status,
+      createdAt: t.createdAt,
+      bookingId: t.bookingId
+    }));
 
     res.json({
       walletBalance: user.walletBalance,
       totalSpent: user.totalSpent,
-      transactions
+      transactions: mapped
     });
 
   } catch (err) {

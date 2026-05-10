@@ -37,6 +37,16 @@ exports.confirmBookingPayment = async ({ bookingId, paymentMethod }) => {
     user.totalSpent += booking.amount;
     await user.save({ session });
 
+    // ✅ Create transaction record for wallet deduction
+    await Transaction.create([{
+      userId: user._id,
+      bookingId: booking._id,
+      amount: booking.amount,
+      type: "payment",
+      method: paymentMethod,
+      status: "success"
+    }], { session });
+
     await session.commitTransaction();
 
     return booking;
