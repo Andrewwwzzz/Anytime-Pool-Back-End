@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Table = require("../models/table");
-const Booking = require("../models/booking");
+const Booking = require("../models/Booking"); // ✅ capital B — matches the actual filename
 
 router.get("/", async (req, res) => {
   try {
@@ -24,27 +24,24 @@ router.get("/", async (req, res) => {
 
     // Find confirmed bookings that overlap with requested time
     const overlappingBookings = await Booking.find({
-      status: "confirmed",
-      $or: [
-        {
-          startTime: { $lt: end },
-          endTime: { $gt: start }
-        }
-      ]
-    }).select("table");
+      status: { $in: ["confirmed", "pending_payment"] },
+      startTime: { $lt: end },
+      endTime: { $gt: start }
+    }).select("tableId");
 
     const bookedTableIds = overlappingBookings.map(
-      booking => booking.table.toString()
+      (booking) => booking.tableId?.toString()
     );
 
-    const tables = await Table.find({});
+    const tables = await Table.find({ isActive: true });
 
-    const availability = tables.map(table => ({
+    const availability = tables.map((table) => ({
       tableId: table._id,
       tableNumber: table.tableNumber,
       name: table.name,
       basePrice: table.basePrice,
-      available: !bookedTableIds.includes(table._id.toString())
+      hardware_id: table.hardware_id,
+      available: !bookedTableIds.includes(table.hardware_id)
     }));
 
     res.json({
