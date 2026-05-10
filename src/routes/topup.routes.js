@@ -101,7 +101,7 @@ router.get("/admin/requests", auth, async (req, res) => {
 
     const requests = await TopUpRequest.find(query)
       .sort({ createdAt: -1 })
-      .populate("userId", "name email walletBalance")
+      .populate("userId", "name email walletBalance shortId")
       .populate("reviewedBy", "name");
 
     res.json(requests);

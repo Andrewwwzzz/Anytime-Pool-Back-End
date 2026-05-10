@@ -58,6 +58,13 @@ const userSchema = new mongoose.Schema(
     showName: {
       type: Boolean,
       default: true
+    },
+
+    // ✅ Short numeric ID for PayNow reference (e.g. 123456)
+    shortId: {
+      type: String,
+      unique: true,
+      sparse: true
     }
   },
   { timestamps: true }

@@ -35,10 +35,20 @@ router.post("/register", async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Generate unique 6-digit short ID
+    let shortId;
+    let isUnique = false;
+    while (!isUnique) {
+      shortId = String(Math.floor(100000 + Math.random() * 900000));
+      const existing = await User.findOne({ shortId });
+      if (!existing) isUnique = true;
+    }
+
     await User.create({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      shortId
     });
 
     res.json({
@@ -130,6 +140,7 @@ router.get("/me", auth, async (req, res) => {
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
+        shortId: user.shortId || null,
         createdAt: user.createdAt
       }
     });
@@ -137,6 +148,36 @@ router.get("/me", auth, async (req, res) => {
   } catch (error) {
     console.error("ME ERROR:", error);
     res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
+
+/*
+========================================
+MIGRATE — assign shortId to existing users
+Call once: GET /api/auth/migrate-short-ids
+========================================
+*/
+router.get("/migrate-short-ids", async (req, res) => {
+  try {
+    const users = await User.find({ shortId: { $exists: false } });
+    let count = 0;
+
+    for (const user of users) {
+      let shortId;
+      let isUnique = false;
+      while (!isUnique) {
+        shortId = String(Math.floor(100000 + Math.random() * 900000));
+        const existing = await User.findOne({ shortId });
+        if (!existing) isUnique = true;
+      }
+      user.shortId = shortId;
+      await user.save();
+      count++;
+    }
+
+    res.json({ message: `Assigned shortId to ${count} users` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
