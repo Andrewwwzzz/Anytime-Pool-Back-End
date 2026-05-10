@@ -193,7 +193,7 @@ router.get("/report/sales", auth, requireAdmin, async (req, res) => {
     const revenueByTable = {};
     confirmedBookings.forEach(b => { const key = b.tableId || "Unknown"; revenueByTable[key] = (revenueByTable[key] || 0) + (b.amount || 0); });
 
-    const doc = new PDFDocument({ size: "A4", margins: { top: 50, bottom: 50, left: 50, right: 50 } });
+    const doc = new PDFDocument({ size: "A4", margins: { top: 50, bottom: 50, left: 50, right: 50 }, bufferPages: true });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="EnvoPool-Report-${fromDate.toISOString().slice(0,10)}-to-${toDate.toISOString().slice(0,10)}.pdf"`);
