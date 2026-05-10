@@ -52,6 +52,12 @@ const userSchema = new mongoose.Schema(
     dateOfBirth: {
       type: String,
       default: null
+    },
+
+    // ✅ Added: controls whether user name shows on booking grid
+    showName: {
+      type: Boolean,
+      default: true
     }
   },
   { timestamps: true }
