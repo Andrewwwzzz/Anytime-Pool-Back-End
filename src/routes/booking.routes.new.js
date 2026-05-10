@@ -48,6 +48,18 @@ router.post("/", auth, async (req, res) => {
       return res.status(400).json({ error: "End time must be after start time" });
     }
 
+    // ✅ Check maintenance FIRST before anything else
+    const Table = require("../models/table");
+    const table = await Table.findOne({ hardware_id: tableId });
+
+    if (!table) {
+      return res.status(404).json({ error: "Table not found" });
+    }
+
+    if (table.status === "maintenance" || table.isActive === false) {
+      return res.status(403).json({ error: "This table is currently under maintenance and cannot be booked" });
+    }
+
     // Check for overlapping bookings on the same table
     const conflict = await Booking.findOne({
       tableId,
