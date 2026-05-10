@@ -99,8 +99,8 @@ REGISTER ROUTES
 app.use("/api/bookings",       bookingRoutes);
 app.use("/api/payments",       paymentRoutes);
 app.use("/api/auth",           authRoutes);
+app.use("/api/admin/bookings", adminBookingRoutes);  // ✅ more specific — must come FIRST
 app.use("/api/admin",          adminRoutes);
-app.use("/api/admin/bookings", adminBookingRoutes);
 app.use("/api/tables",         tableRoutes);
 app.use("/api/users",          userRoutes);
 app.use("/api/transactions",   transactionRoutes);
