@@ -170,8 +170,7 @@ router.get("/migrate-short-ids", async (req, res) => {
         const existing = await User.findOne({ shortId });
         if (!existing) isUnique = true;
       }
-      user.shortId = shortId;
-      await user.save();
+      await User.updateOne({ _id: user._id }, { $set: { shortId } });
       count++;
     }
 
