@@ -150,6 +150,194 @@ router.delete("/promo-codes/:id", auth, requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
+/*
+========================================
+GENERATE PDF SALES REPORT
+Admin calls: GET /api/admin/report/sales?from=2026-05-01&to=2026-05-31
+Returns a downloadable PDF file
+========================================
+*/
+router.get("/report/sales", auth, requireAdmin, async (req, res) => {
+  try {
+    const PDFDocument = require("pdfkit");
+
+    const now = new Date();
+    const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    const fromDate = req.query.from ? new Date(req.query.from) : defaultFrom;
+    const toDate = req.query.to ? new Date(new Date(req.query.to).setHours(23, 59, 59)) : defaultTo;
+
+    const formatDate = (date) => new Date(date).toLocaleDateString("en-SG", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Singapore" });
+    const formatTime = (date) => new Date(date).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Singapore" });
+    const formatMoney = (amount) => `$${(amount || 0).toFixed(2)}`;
+    const drawLine = (doc, y, color) => { doc.moveTo(50, y).lineTo(545, y).strokeColor(color || "#CCCCCC").lineWidth(0.5).stroke(); };
+
+    const [allBookings, allTransactions, totalUsers, tables] = await Promise.all([
+      Booking.find({ createdAt: { $gte: fromDate, $lte: toDate } }).sort({ createdAt: -1 }),
+      Transaction.find({ createdAt: { $gte: fromDate, $lte: toDate } }).populate("userId", "name email").sort({ createdAt: -1 }),
+      User.countDocuments(),
+      Table.find()
+    ]);
+
+    const confirmedBookings = allBookings.filter(b => b.status === "confirmed");
+    const cancelledBookings = allBookings.filter(b => b.status === "cancelled");
+    const expiredBookings   = allBookings.filter(b => b.status === "expired");
+    const pendingBookings   = allBookings.filter(b => b.status === "pending_payment");
+    const totalRevenue      = confirmedBookings.reduce((sum, b) => sum + (b.amount || 0), 0);
+    const walletRevenue     = confirmedBookings.filter(b => b.paymentMethod === "wallet").reduce((sum, b) => sum + (b.amount || 0), 0);
+    const paynowRevenue     = confirmedBookings.filter(b => b.paymentMethod === "paynow").reduce((sum, b) => sum + (b.amount || 0), 0);
+    const walletTopups      = allTransactions.filter(t => t.type === "topup").reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    const revenueByTable = {};
+    confirmedBookings.forEach(b => { const key = b.tableId || "Unknown"; revenueByTable[key] = (revenueByTable[key] || 0) + (b.amount || 0); });
+
+    const doc = new PDFDocument({ size: "A4", margins: { top: 50, bottom: 50, left: 50, right: 50 } });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="EnvoPool-Report-${fromDate.toISOString().slice(0,10)}-to-${toDate.toISOString().slice(0,10)}.pdf"`);
+    doc.pipe(res);
+
+    // Header
+    doc.rect(0, 0, 595, 140).fill("#1a472a");
+    doc.font("Helvetica-Bold").fontSize(28).fillColor("#FFFFFF").text("ENVO POOL", 50, 45);
+    doc.font("Helvetica").fontSize(13).fillColor("#90EE90").text("Sales & Performance Report", 50, 82);
+    doc.fontSize(11).fillColor("#FFFFFF").text(`${formatDate(fromDate)} — ${formatDate(toDate)}`, 50, 105);
+    doc.fontSize(9).fillColor("#90EE90").text(`Generated: ${formatDate(now)} ${formatTime(now)} SGT`, 350, 55, { align: "right", width: 195 });
+    doc.fontSize(9).fillColor("#90EE90").text("CONFIDENTIAL", 350, 70, { align: "right", width: 195 });
+
+    // Stats boxes
+    const boxY = 165;
+    const boxes = [
+      { label: "Total Revenue",     value: formatMoney(totalRevenue),          color: "#1a472a" },
+      { label: "Confirmed Bookings",value: String(confirmedBookings.length),   color: "#1a472a" },
+      { label: "Total Users",       value: String(totalUsers),                 color: "#1a472a" },
+      { label: "Cancellations",     value: String(cancelledBookings.length),   color: "#8B0000" }
+    ];
+    boxes.forEach((box, i) => {
+      const x = 50 + i * 125;
+      doc.rect(x, boxY, 115, 70).fill(box.color);
+      doc.font("Helvetica-Bold").fontSize(18).fillColor("#FFFFFF").text(box.value, x, boxY + 16, { width: 115, align: "center" });
+      doc.font("Helvetica").fontSize(8).fillColor("#CCCCCC").text(box.label, x, boxY + 44, { width: 115, align: "center" });
+    });
+
+    // Revenue Breakdown
+    let y = 265;
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1a472a").text("Revenue Breakdown", 50, y);
+    y += 20; drawLine(doc, y, "#1a472a"); y += 15;
+    const revenueRows = [
+      ["PayNow Revenue", formatMoney(paynowRevenue), `${totalRevenue > 0 ? ((paynowRevenue/totalRevenue)*100).toFixed(1) : 0}%`],
+      ["Wallet Revenue", formatMoney(walletRevenue),  `${totalRevenue > 0 ? ((walletRevenue/totalRevenue)*100).toFixed(1) : 0}%`],
+      ["Wallet Top-ups", formatMoney(walletTopups),   "—"],
+      ["Gross Revenue",  formatMoney(totalRevenue),   "100%"]
+    ];
+    revenueRows.forEach((row, i) => {
+      doc.rect(50, y, 495, 22).fill(i % 2 === 0 ? "#F5F5F5" : "#FFFFFF");
+      doc.font("Helvetica").fontSize(10).fillColor("#333333").text(row[0], 60, y + 6).text(row[1], 350, y + 6, { width: 80, align: "right" }).text(row[2], 440, y + 6, { width: 95, align: "right" });
+      y += 22;
+    });
+    doc.rect(50, y, 495, 24).fill("#1a472a");
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#FFFFFF").text("NET REVENUE", 60, y + 6).text(formatMoney(totalRevenue), 350, y + 6, { width: 80, align: "right" });
+    y += 40;
+
+    // Booking Summary
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1a472a").text("Booking Summary", 50, y);
+    y += 20; drawLine(doc, y, "#1a472a"); y += 15;
+    const bookingRows = [
+      ["Confirmed",       String(confirmedBookings.length), "#2d6a4f"],
+      ["Pending Payment", String(pendingBookings.length),   "#856404"],
+      ["Cancelled",       String(cancelledBookings.length), "#8B0000"],
+      ["Expired",         String(expiredBookings.length),   "#666666"],
+      ["Total",           String(allBookings.length),       "#000000"]
+    ];
+    bookingRows.forEach((row, i) => {
+      doc.rect(50, y, 495, 22).fill(i % 2 === 0 ? "#F5F5F5" : "#FFFFFF");
+      doc.font("Helvetica").fontSize(10).fillColor("#333333").text(row[0], 60, y + 6);
+      doc.font("Helvetica-Bold").fontSize(10).fillColor(row[2]).text(row[1], 440, y + 6, { width: 95, align: "right" });
+      y += 22;
+    });
+    y += 20;
+
+    // Revenue by Table
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1a472a").text("Revenue by Table", 50, y);
+    y += 20; drawLine(doc, y, "#1a472a"); y += 15;
+    doc.rect(50, y, 495, 22).fill("#1a472a");
+    doc.font("Helvetica-Bold").fontSize(9).fillColor("#FFFFFF").text("Table", 60, y + 6).text("Bookings", 250, y + 6, { width: 100, align: "center" }).text("Revenue", 440, y + 6, { width: 95, align: "right" });
+    y += 22;
+    const tableEntries = Object.entries(revenueByTable).sort((a, b) => b[1] - a[1]);
+    if (tableEntries.length === 0) {
+      doc.rect(50, y, 495, 22).fill("#F5F5F5");
+      doc.font("Helvetica").fontSize(10).fillColor("#999999").text("No confirmed bookings in this period", 60, y + 6);
+      y += 22;
+    } else {
+      tableEntries.forEach(([tableId, revenue], i) => {
+        const bookingCount = confirmedBookings.filter(b => b.tableId === tableId).length;
+        const tableName = tables.find(t => t.hardware_id === tableId)?.name || tableId;
+        doc.rect(50, y, 495, 22).fill(i % 2 === 0 ? "#F5F5F5" : "#FFFFFF");
+        doc.font("Helvetica").fontSize(10).fillColor("#333333").text(tableName, 60, y + 6).text(String(bookingCount), 250, y + 6, { width: 100, align: "center" }).text(formatMoney(revenue), 440, y + 6, { width: 95, align: "right" });
+        y += 22;
+      });
+    }
+
+    // Page 2 - Transactions
+    doc.addPage();
+    y = 50;
+    doc.rect(0, 0, 595, 55).fill("#1a472a");
+    doc.font("Helvetica-Bold").fontSize(14).fillColor("#FFFFFF").text("Transaction Detail", 50, 18);
+    doc.font("Helvetica").fontSize(9).fillColor("#90EE90").text(`${formatDate(fromDate)} — ${formatDate(toDate)}`, 50, 38);
+    y = 75;
+
+    doc.rect(50, y, 495, 22).fill("#1a472a");
+    doc.font("Helvetica-Bold").fontSize(8).fillColor("#FFFFFF")
+      .text("Date & Time", 58, y + 7).text("User", 170, y + 7).text("Type", 300, y + 7).text("Method", 365, y + 7).text("Amount", 450, y + 7, { width: 85, align: "right" });
+    y += 22;
+
+    const recentTransactions = allTransactions.slice(0, 40);
+    if (recentTransactions.length === 0) {
+      doc.rect(50, y, 495, 30).fill("#F5F5F5");
+      doc.font("Helvetica").fontSize(10).fillColor("#999999").text("No transactions in this period", 60, y + 10);
+    } else {
+      recentTransactions.forEach((t, i) => {
+        if (y > 750) { doc.addPage(); y = 50; }
+        const bg = i % 2 === 0 ? "#F5F5F5" : "#FFFFFF";
+        const userName = t.userId?.name || "Unknown";
+        const typeLabel = t.type === "topup" ? "Top Up" : t.type === "refund" ? "Refund" : "Payment";
+        const methodLabel = t.method === "paynow" ? "PayNow" : "Wallet";
+        const amountColor = t.type === "topup" ? "#2d6a4f" : "#8B0000";
+        const amountPrefix = t.type === "topup" ? "+" : "-";
+        doc.rect(50, y, 495, 20).fill(bg);
+        doc.font("Helvetica").fontSize(8).fillColor("#333333")
+          .text(`${formatDate(t.createdAt)} ${formatTime(t.createdAt)}`, 58, y + 6)
+          .text(userName.slice(0, 18), 170, y + 6).text(typeLabel, 300, y + 6).text(methodLabel, 365, y + 6);
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(amountColor)
+          .text(`${amountPrefix}${formatMoney(Math.abs(t.amount))}`, 450, y + 6, { width: 85, align: "right" });
+        y += 20;
+      });
+      if (allTransactions.length > 40) {
+        y += 10;
+        doc.font("Helvetica").fontSize(9).fillColor("#666666").text(`... and ${allTransactions.length - 40} more transactions not shown`, 50, y);
+      }
+    }
+
+    // Footer
+    const pageCount = doc.bufferedPageRange().count;
+    for (let i = 0; i < pageCount; i++) {
+      doc.switchToPage(i);
+      drawLine(doc, 785, "#CCCCCC");
+      doc.font("Helvetica").fontSize(8).fillColor("#999999")
+        .text("Envo Pool Pte Ltd  •  Confidential  •  For authorised recipients only", 50, 792, { align: "center", width: 495 })
+        .text(`Page ${i + 1} of ${pageCount}`, 50, 805, { align: "right", width: 495 });
+    }
+
+    doc.end();
+
+  } catch (err) {
+    console.error("Report error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
 
 // This line intentionally left blank
