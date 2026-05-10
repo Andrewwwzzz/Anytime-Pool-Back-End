@@ -6,6 +6,7 @@ const Booking = require("../models/Booking");
 const Transaction = require("../models/Transaction");
 const AdminLog = require("../models/AdminLog");
 const Table = require("../models/table");
+const TimerSession = require("../models/TimerSession");
 
 const auth = require("../middleware/auth");
 
@@ -113,8 +114,13 @@ router.post("/tables/:id/stop-timer", auth, requireAdmin, async (req, res) => {
 
 router.get("/timer-sessions", auth, requireAdmin, async (req, res) => {
   try {
-    const tables = await Table.find({ timerStartedAt: { $ne: null } });
-    res.json(tables);
+    // Return completed timer sessions (invoices)
+    const sessions = await TimerSession.find()
+      .sort({ createdAt: -1 })
+      .populate("startedBy", "name email")
+      .populate("customerId", "name email");
+
+    res.json(sessions);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
