@@ -17,10 +17,14 @@ const timerSessionSchema = new (require("mongoose").Schema)({
   amountCharged: { type: Number, required: true },
   startedBy: { type: require("mongoose").Schema.Types.ObjectId, ref: "User" },
   customerId: { type: require("mongoose").Schema.Types.ObjectId, ref: "User", default: null },
-  notes: { type: String, default: null }
+  notes: { type: String, default: null },
+  isDeleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null },
+  deletedReason: { type: String, default: null },
+  deletedBy: { type: require("mongoose").Schema.Types.ObjectId, ref: "User", default: null }
 }, { timestamps: true });
 
-const TimerSession = require("mongoose").models.TimerSession || 
+const TimerSession = require("mongoose").models.TimerSession ||
   require("mongoose").model("TimerSession", timerSessionSchema);
 
 const auth = require("../middleware/auth");
