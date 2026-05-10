@@ -127,7 +127,8 @@ router.post("/checkout", auth, async (req, res) => {
         bookingId: booking._id.toString()
       },
       // Stripe session expires when the booking expires
-      expires_at: Math.floor(new Date(booking.expiresAt).getTime() / 1000),
+      // Stripe requires expires_at to be at least 30 minutes from now
+      expires_at: Math.floor((Date.now() + 31 * 60 * 1000) / 1000),
       success_url: `${process.env.FRONTEND_URL}/payment-verification`,
       cancel_url: `${process.env.FRONTEND_URL}/booking`
     });
