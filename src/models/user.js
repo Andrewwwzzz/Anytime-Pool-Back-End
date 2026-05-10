@@ -35,6 +35,23 @@ const userSchema = new mongoose.Schema(
     totalSpent: {
       type: Number,
       default: 0
+    },
+
+    // ✅ Added: reward points system
+    rewardPoints: {
+      type: Number,
+      default: 0
+    },
+
+    // ✅ Added: profile fields the frontend Settings page uses
+    phone: {
+      type: String,
+      default: null
+    },
+
+    dateOfBirth: {
+      type: String,
+      default: null
     }
   },
   { timestamps: true }

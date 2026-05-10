@@ -10,6 +10,8 @@ const auth = require("../middleware/auth.middleware");
 /*
 ========================================
 REGISTER
+Creates a new user account.
+isVerified starts as false — admin must verify before booking.
 ========================================
 */
 router.post("/register", async (req, res) => {
@@ -22,7 +24,7 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    email = email.toLowerCase(); // 🔥 normalize
+    email = email.toLowerCase();
 
     const existing = await User.findOne({ email });
     if (existing) {
@@ -45,48 +47,38 @@ router.post("/register", async (req, res) => {
 
   } catch (error) {
     console.error("REGISTER ERROR:", error);
-
-    res.status(500).json({
-      error: "Register failed"
-    });
+    res.status(500).json({ error: "Register failed" });
   }
 });
 
 /*
 ========================================
 LOGIN
+Returns a JWT token and user info.
 ========================================
 */
 router.post("/login", async (req, res) => {
   try {
     let { email, password } = req.body;
 
-    email = email.toLowerCase(); // 🔥 normalize
+    email = email.toLowerCase();
 
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(400).json({
-        error: "Invalid credentials"
-      });
+      return res.status(400).json({ error: "Invalid credentials" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(400).json({
-        error: "Invalid credentials"
-      });
+      return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    // 🔥 include role in token
     const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role
-      },
+      { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
     );
 
     res.json({
@@ -97,38 +89,108 @@ router.post("/login", async (req, res) => {
         email: user.email,
         role: user.role,
         isVerified: user.isVerified,
-        walletBalance: user.walletBalance
+        walletBalance: user.walletBalance,
+        rewardPoints: user.rewardPoints || 0,
+        phone: user.phone || null,
+        dateOfBirth: user.dateOfBirth || null
       }
     });
 
   } catch (error) {
     console.error("LOGIN ERROR:", error);
-
-    res.status(500).json({
-      error: "Login failed"
-    });
+    res.status(500).json({ error: "Login failed" });
   }
 });
 
 /*
 ========================================
 GET CURRENT USER
+Frontend calls this on every page load to
+check who is logged in and get latest data.
 ========================================
 */
 router.get("/me", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
 
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     res.json({
-      user
+      user: {
+        _id: user._id,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        walletBalance: user.walletBalance,
+        totalSpent: user.totalSpent,
+        rewardPoints: user.rewardPoints || 0,
+        phone: user.phone || null,
+        dateOfBirth: user.dateOfBirth || null,
+        createdAt: user.createdAt
+      }
     });
 
   } catch (error) {
     console.error("ME ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch user" });
+  }
+});
 
-    res.status(500).json({
-      error: "Failed to fetch user"
+/*
+========================================
+UPDATE PROFILE
+Frontend calls: POST /api/auth/update-profile
+Lets users update their name, phone, date of birth.
+========================================
+*/
+router.post("/update-profile", auth, async (req, res) => {
+  try {
+    const { name, phone, dateOfBirth } = req.body;
+
+    // Build update object — only include fields that were sent
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (phone !== undefined) updates.phone = phone;
+    if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updates },
+      { new: true }        // return the updated user
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        _id: user._id,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        walletBalance: user.walletBalance,
+        totalSpent: user.totalSpent,
+        rewardPoints: user.rewardPoints || 0,
+        phone: user.phone || null,
+        dateOfBirth: user.dateOfBirth || null
+      }
     });
+
+  } catch (error) {
+    console.error("UPDATE PROFILE ERROR:", error);
+    res.status(500).json({ error: "Failed to update profile" });
   }
 });
 
