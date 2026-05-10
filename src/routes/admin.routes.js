@@ -120,9 +120,36 @@ router.get("/timer-sessions", auth, requireAdmin, async (req, res) => {
   }
 });
 
-router.get("/promo-codes", auth, requireAdmin, async (req, res) => { res.json([]); });
-router.post("/promo-codes", auth, requireAdmin, async (req, res) => { res.json({ message: "Promo code created", promo: req.body }); });
-router.patch("/promo-codes/:id", auth, requireAdmin, async (req, res) => { res.json({ message: "Promo code updated" }); });
-router.delete("/promo-codes/:id", auth, requireAdmin, async (req, res) => { res.json({ message: "Promo code deleted" }); });
+const PromoCode = require("../models/PromoCode");
+
+router.get("/promo-codes", auth, requireAdmin, async (req, res) => {
+  try {
+    const promos = await PromoCode.find().sort({ createdAt: -1 });
+    res.json(promos);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post("/promo-codes", auth, requireAdmin, async (req, res) => {
+  try {
+    const promo = await PromoCode.create({ ...req.body, code: req.body.code.toUpperCase() });
+    res.json(promo);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.patch("/promo-codes/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    const promo = await PromoCode.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(promo);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.delete("/promo-codes/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    await PromoCode.findByIdAndDelete(req.params.id);
+    res.json({ message: "Promo code deleted" });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 module.exports = router;
+
+// This line intentionally left blank
