@@ -32,17 +32,18 @@ router.get("/", auth, requireAdmin, async (req, res) => {
 
     let query = {};
 
-    // If a search term is provided, search by name or email
+    // Search by name, email OR shortId
     if (search && search.trim()) {
       query = {
         $or: [
           { name: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } }
+          { email: { $regex: search, $options: "i" } },
+          { shortId: { $regex: search, $options: "i" } }
         ]
       };
     }
 
-    const users = await User.find(query).select("-password");
+    const users = await User.find(query).select("-password"); // shortId included by default
 
     res.json(users);
 
