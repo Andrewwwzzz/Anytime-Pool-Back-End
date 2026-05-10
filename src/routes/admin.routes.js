@@ -135,7 +135,8 @@ router.post("/tables/:id/stop-timer", auth, requireAdmin, async (req, res) => {
     table.manualOverride = null;
     await table.save();
 
-    await Transaction.create({ userId: req.user.id, amount: amountCharged, type: "payment", method: "wallet", status: "success" });
+    // Record as cash payment — does not affect any wallet balance
+    await Transaction.create({ userId: req.user.id, amount: amountCharged, type: "payment", method: "cash", status: "success" });
 
     const io = req.app.get("io");
     io.emit("bookingUpdated", { tableId: table._id, status: "timer_stopped" });
@@ -156,6 +157,37 @@ router.get("/timer-sessions", auth, requireAdmin, async (req, res) => {
       .populate("customerId", "name email");
 
     res.json(sessions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/*
+========================================
+DELETE TIMER SESSION INVOICE
+Frontend calls: DELETE /api/admin/timer-sessions/:id
+========================================
+*/
+router.delete("/timer-sessions/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    const session = await TimerSession.findByIdAndDelete(req.params.id);
+
+    if (!session) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    await AdminLog.create({
+      adminId: req.user.id,
+      action: "delete_timer_session",
+      details: {
+        sessionId: session._id,
+        tableName: session.tableName,
+        amountCharged: session.amountCharged
+      }
+    });
+
+    res.json({ message: "Invoice deleted successfully" });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -26,7 +26,9 @@ const transactionSchema = new mongoose.Schema(
 
     method: {
       type: String,
-      enum: ["wallet", "paynow"],
+      // ✅ Added "cash" for timer sessions / walk-in payments
+      // cash = collected manually by staff, no wallet deduction
+      enum: ["wallet", "paynow", "cash"],
       required: true,
     },
 
