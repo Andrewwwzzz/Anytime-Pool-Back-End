@@ -74,6 +74,50 @@ const bookingSchema = new mongoose.Schema(
       default: null
     },
 
+    // Soft delete — never hard delete from UI
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null
+    },
+
+    deletedReason: {
+      type: String,
+      default: null
+    },
+
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+
+    // Soft delete
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null
+    },
+
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+
+    deletionReason: {
+      type: String,
+      default: null
+    },
+
     // Promo code tracking
     promoCode: {
       type: String,

@@ -24,13 +24,24 @@ Frontend calls: DELETE /api/admin/bookings/:id
 */
 router.delete("/:id", async (req, res) => {
   try {
+    const { reason } = req.body;
+
+    if (!reason || reason.trim().length < 5) {
+      return res.status(400).json({ error: "A reason is required to delete a booking (minimum 5 characters)" });
+    }
+
     const booking = await Booking.findById(req.params.id);
 
     if (!booking) {
       return res.status(404).json({ error: "Booking not found" });
     }
 
-    await Booking.deleteOne({ _id: booking._id });
+    // ✅ Soft delete — mark as deleted, never actually remove
+    booking.isDeleted = true;
+    booking.deletedAt = new Date();
+    booking.deletedReason = reason.trim();
+    booking.deletedBy = req.user.id;
+    await booking.save();
 
     // Log the admin action
     await AdminLog.create({
@@ -42,7 +53,8 @@ router.delete("/:id", async (req, res) => {
         tableId: booking.tableId,
         startTime: booking.startTime,
         endTime: booking.endTime,
-        amount: booking.amount
+        amount: booking.amount,
+        reason: reason.trim()
       }
     });
 
@@ -50,7 +62,7 @@ router.delete("/:id", async (req, res) => {
     const io = req.app.get("io");
     io.emit("bookingUpdated", { bookingId: booking._id, status: "deleted" });
 
-    res.json({ message: "Booking deleted successfully" });
+    res.json({ message: "Booking marked as deleted. Audit trail preserved." });
 
   } catch (err) {
     res.status(500).json({ error: err.message });

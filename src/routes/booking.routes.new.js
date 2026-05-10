@@ -133,9 +133,16 @@ router.get("/", async (req, res) => {
       }
     );
 
-    const bookings = await Booking.find()
+    const { showDeleted } = req.query;
+
+    // By default hide soft-deleted bookings
+    const query = showDeleted === "true" ? {} : { isDeleted: { $ne: true } };
+
+    const bookings = await Booking.find(query)
       .sort({ createdAt: -1 })
-      .populate("userId", "name email shortId");
+      .populate("userId", "name email shortId")
+      .populate("deletedBy", "name")
+      .populate("cancelledBy", "name");
 
     res.json(bookings);
 

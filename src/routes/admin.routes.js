@@ -192,11 +192,16 @@ router.post("/tables/:id/stop-timer", auth, requireAdmin, async (req, res) => {
 
 router.get("/timer-sessions", auth, requireAdmin, async (req, res) => {
   try {
-    // Return completed timer sessions (invoices)
-    const sessions = await TimerSession.find()
+    const { showDeleted } = req.query;
+
+    // By default hide deleted, show all if showDeleted=true
+    const query = showDeleted === "true" ? {} : { isDeleted: { $ne: true } };
+
+    const sessions = await TimerSession.find(query)
       .sort({ createdAt: -1 })
       .populate("startedBy", "name email")
-      .populate("customerId", "name email");
+      .populate("customerId", "name email")
+      .populate("deletedBy", "name");
 
     res.json(sessions);
   } catch (err) {
@@ -218,11 +223,18 @@ router.delete("/timer-sessions/:id", auth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "A reason is required to delete an invoice (minimum 5 characters)" });
     }
 
-    const session = await TimerSession.findByIdAndDelete(req.params.id);
+    const session = await TimerSession.findById(req.params.id);
 
     if (!session) {
       return res.status(404).json({ error: "Invoice not found" });
     }
+
+    // ✅ Soft delete — mark as deleted, never actually remove
+    session.isDeleted = true;
+    session.deletedAt = new Date();
+    session.deletedReason = reason.trim();
+    session.deletedBy = req.user.id;
+    await session.save();
 
     await AdminLog.create({
       adminId: req.user.id,
@@ -235,7 +247,7 @@ router.delete("/timer-sessions/:id", auth, requireAdmin, async (req, res) => {
       }
     });
 
-    res.json({ message: "Invoice deleted successfully" });
+    res.json({ message: "Invoice marked as deleted. Audit trail preserved." });
 
   } catch (err) {
     res.status(500).json({ error: err.message });
