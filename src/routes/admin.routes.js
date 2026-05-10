@@ -6,7 +6,22 @@ const Booking = require("../models/Booking");
 const Transaction = require("../models/Transaction");
 const AdminLog = require("../models/AdminLog");
 const Table = require("../models/table");
-const TimerSession = require("../models/TimerSession");
+// TimerSession schema defined inline — no separate model file needed
+const timerSessionSchema = new (require("mongoose").Schema)({
+  tableId: { type: require("mongoose").Schema.Types.ObjectId, ref: "Table", required: true },
+  tableName: { type: String, required: true },
+  startedAt: { type: Date, required: true },
+  endedAt: { type: Date, required: true },
+  durationSeconds: { type: Number, required: true },
+  hourlyRate: { type: Number, required: true },
+  amountCharged: { type: Number, required: true },
+  startedBy: { type: require("mongoose").Schema.Types.ObjectId, ref: "User" },
+  customerId: { type: require("mongoose").Schema.Types.ObjectId, ref: "User", default: null },
+  notes: { type: String, default: null }
+}, { timestamps: true });
+
+const TimerSession = require("mongoose").models.TimerSession || 
+  require("mongoose").model("TimerSession", timerSessionSchema);
 
 const auth = require("../middleware/auth");
 
