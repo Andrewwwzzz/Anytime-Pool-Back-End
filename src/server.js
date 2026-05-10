@@ -73,20 +73,16 @@ const bookingRoutes      = require("./routes/booking.routes.new");
 const paymentRoutes      = require("./routes/payment.routes.new");
 const authRoutes         = require("./routes/auth.routes");
 const adminRoutes        = require("./routes/admin.routes");
+const adminBookingRoutes = require("./routes/admin.booking.routes");
 const tableRoutes        = require("./routes/table.routes");
 const userRoutes         = require("./routes/user.routes");
 const transactionRoutes  = require("./routes/transaction.routes");
 const logRoutes          = require("./routes/log.routes");
-
-/*
-========================================
-ROUTES — newly mounted (were missing)
-========================================
-*/
 const deviceRoutes       = require("./routes/device.routes");
-const adminBookingRoutes = require("./routes/admin.booking.routes");
 const availabilityRoutes = require("./routes/availability.routes");
 const setupRoutes        = require("./routes/setup.routes");
+const promoRoutes        = require("./routes/promo.routes");
+const termsRoutes        = require("./routes/terms.routes");
 
 /*
 ========================================
@@ -100,19 +96,21 @@ const { startBookingExpiryJob } = require("./jobs/expireBookings");
 REGISTER ROUTES
 ========================================
 */
-app.use("/api/bookings",          bookingRoutes);
-app.use("/api/payments",          paymentRoutes);
-app.use("/api/auth",              authRoutes);
-app.use("/api/admin",             adminRoutes);
-app.use("/api/admin/bookings",    adminBookingRoutes);   // admin booking management
-app.use("/api/tables",            tableRoutes);
-app.use("/api/users",             userRoutes);
-app.use("/api/transactions",      transactionRoutes);
-app.use("/api/logs",              logRoutes);
-app.use("/api/device",            deviceRoutes);         // ESP32 light control (GET state)
-app.use("/api/device-control",    deviceRoutes);         // ESP32 manual ON/OFF (POST control/clear)
-app.use("/api/availability",      availabilityRoutes);   // table availability check
-app.use("/api/setup",             setupRoutes);          // seed tables (dev/admin use)
+app.use("/api/bookings",       bookingRoutes);
+app.use("/api/payments",       paymentRoutes);
+app.use("/api/auth",           authRoutes);
+app.use("/api/admin",          adminRoutes);
+app.use("/api/admin/bookings", adminBookingRoutes);
+app.use("/api/tables",         tableRoutes);
+app.use("/api/users",          userRoutes);
+app.use("/api/transactions",   transactionRoutes);
+app.use("/api/logs",           logRoutes);
+app.use("/api/device",         deviceRoutes);
+app.use("/api/device-control", deviceRoutes);
+app.use("/api/availability",   availabilityRoutes);
+app.use("/api/setup",          setupRoutes);
+app.use("/api/promo",          promoRoutes);
+app.use("/api/terms",          termsRoutes);
 
 /*
 ========================================

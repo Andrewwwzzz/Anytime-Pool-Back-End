@@ -8,7 +8,9 @@ const AdminLog = require("../models/AdminLog");
 const auth = require("../middleware/auth.middleware");
 
 /*
-ADMIN CHECK
+========================================
+ADMIN MIDDLEWARE
+========================================
 */
 function requireAdmin(req, res, next) {
   if (req.user.role !== "admin") {
@@ -18,39 +20,79 @@ function requireAdmin(req, res, next) {
 }
 
 /*
-GET USERS
+========================================
+GET ALL USERS
+Frontend calls: GET /api/users
+Supports: GET /api/users?search=john
+========================================
 */
 router.get("/", auth, requireAdmin, async (req, res) => {
-  const users = await User.find().select("-password");
-  res.json(users);
+  try {
+    const { search } = req.query;
+
+    let query = {};
+
+    // If a search term is provided, search by name or email
+    if (search && search.trim()) {
+      query = {
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } }
+        ]
+      };
+    }
+
+    const users = await User.find(query).select("-password");
+
+    res.json(users);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /*
+========================================
 DELETE USER
+Frontend calls: DELETE /api/users/:id
+========================================
 */
 router.delete("/:id", auth, requireAdmin, async (req, res) => {
-  const io = req.app.get("io");
+  try {
+    const io = req.app.get("io");
 
-  await User.findByIdAndDelete(req.params.id);
+    await User.findByIdAndDelete(req.params.id);
 
-  await AdminLog.create({
-    adminId: req.user.id,
-    action: "delete_user",
-    targetUserId: req.params.id
-  });
+    await AdminLog.create({
+      adminId: req.user.id,
+      action: "delete_user",
+      targetUserId: req.params.id
+    });
 
-  io.emit("users_updated");
+    io.emit("users_updated");
 
-  res.json({ message: "User deleted" });
+    res.json({ message: "User deleted" });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /*
-🔥 UPDATE WALLET + POINTS (NEW FLEXIBLE SYSTEM)
+========================================
+UPDATE WALLET AND/OR REWARD POINTS
+Frontend calls: PATCH /api/users/:id/wallet
+Body can include:
+  walletBalance  — set wallet to exact amount
+  walletDelta    — add/subtract from wallet
+  points         — set points to exact amount
+  pointsDelta    — add/subtract from points
+========================================
 */
 router.patch("/:id/wallet", auth, requireAdmin, async (req, res) => {
-  const io = req.app.get("io");
-
   try {
+    const io = req.app.get("io");
+
     const {
       walletBalance,
       walletDelta,
@@ -67,31 +109,29 @@ router.patch("/:id/wallet", auth, requireAdmin, async (req, res) => {
     let walletChange = 0;
     let pointsChange = 0;
 
-    // 💰 Wallet logic
+    // Wallet logic — set to exact value OR add/subtract delta
     if (walletBalance !== undefined) {
       walletChange = walletBalance - user.walletBalance;
       user.walletBalance = walletBalance;
     }
-
     if (walletDelta !== undefined) {
       walletChange = walletDelta;
       user.walletBalance += walletDelta;
     }
 
-    // ⭐ Points logic
+    // Points logic — uses rewardPoints field (not points)
     if (points !== undefined) {
-      pointsChange = points - user.points;
-      user.points = points;
+      pointsChange = points - (user.rewardPoints || 0);
+      user.rewardPoints = points;
     }
-
     if (pointsDelta !== undefined) {
       pointsChange = pointsDelta;
-      user.points += pointsDelta;
+      user.rewardPoints = (user.rewardPoints || 0) + pointsDelta;
     }
 
     await user.save();
 
-    // 💰 Create transaction ONLY for wallet changes
+    // Only create a transaction record if the wallet actually changed
     if (walletChange !== 0) {
       await Transaction.create({
         userId: user._id,
@@ -102,29 +142,26 @@ router.patch("/:id/wallet", auth, requireAdmin, async (req, res) => {
       });
     }
 
-    // 🧾 Admin log
+    // Log the admin action
     await AdminLog.create({
       adminId: req.user.id,
       action: "update_wallet_points",
       targetUserId: user._id,
-      details: {
-        walletChange,
-        pointsChange
-      }
+      details: { walletChange, pointsChange }
     });
 
-    // ⚡ Realtime updates
+    // Notify frontend in real time
     io.emit("users_updated");
     io.emit("walletUpdated", {
       userId: user._id,
       walletBalance: user.walletBalance,
-      points: user.points
+      rewardPoints: user.rewardPoints
     });
     io.emit("transaction_updated");
 
     res.json({
       walletBalance: user.walletBalance,
-      points: user.points
+      rewardPoints: user.rewardPoints
     });
 
   } catch (err) {
