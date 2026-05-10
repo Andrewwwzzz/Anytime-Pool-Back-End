@@ -109,20 +109,40 @@ router.post("/tables/:id/start-timer", auth, requireAdmin, async (req, res) => {
 
 router.post("/tables/:id/stop-timer", auth, requireAdmin, async (req, res) => {
   try {
-    const { durationSeconds, hourlyRate } = req.body;
+    const { durationSeconds, hourlyRate, startedAt } = req.body;
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ error: "Table not found" });
+
     const hours = durationSeconds / 3600;
     const amountCharged = parseFloat((hours * hourlyRate).toFixed(2));
+    const sessionStartedAt = startedAt ? new Date(startedAt) : (table.timerStartedAt || new Date(Date.now() - durationSeconds * 1000));
+    const sessionEndedAt = new Date();
+
+    // ✅ Save timer session invoice to database
+    const timerSession = await TimerSession.create({
+      tableId: table._id,
+      tableName: table.name,
+      startedAt: sessionStartedAt,
+      endedAt: sessionEndedAt,
+      durationSeconds,
+      hourlyRate,
+      amountCharged,
+      startedBy: req.user.id
+    });
+
     table.timerStartedAt = null;
     table.timerHourlyRate = null;
     table.manualOverride = null;
     await table.save();
+
     await Transaction.create({ userId: req.user.id, amount: amountCharged, type: "payment", method: "wallet", status: "success" });
+
     const io = req.app.get("io");
     io.emit("bookingUpdated", { tableId: table._id, status: "timer_stopped" });
-    res.json({ message: "Timer stopped", durationSeconds, amountCharged, table });
+
+    res.json({ message: "Timer stopped", durationSeconds, amountCharged, timerSession, table });
   } catch (err) {
+    console.error("Stop timer error:", err);
     res.status(500).json({ error: err.message });
   }
 });
