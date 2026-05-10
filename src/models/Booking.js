@@ -60,7 +60,23 @@ const bookingSchema = new mongoose.Schema(
       default: false
     },
 
-    stripeSessionId: String
+    stripeSessionId: String,
+
+    // Promo code tracking
+    promoCode: {
+      type: String,
+      default: null
+    },
+
+    promoDiscount: {
+      type: Number,
+      default: 0
+    },
+
+    originalAmount: {
+      type: Number,
+      default: null
+    }
   },
   { timestamps: true }
 );

@@ -20,7 +20,7 @@ or /api/payments/checkout
 */
 router.post("/", auth, async (req, res) => {
   try {
-    const { tableId, startTime, endTime, amount } = req.body;
+    const { tableId, startTime, endTime, amount, promoCode, promoDiscount, originalAmount } = req.body;
 
     // Fetch the full user to check verification status
     const user = await User.findById(req.user.id);
@@ -80,7 +80,10 @@ router.post("/", auth, async (req, res) => {
       endTime: end,
       amount,
       status: "pending_payment",
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      promoCode: promoCode || null,
+      promoDiscount: promoDiscount || 0,
+      originalAmount: originalAmount || amount
     });
 
     // Log the booking creation
@@ -130,7 +133,9 @@ router.get("/", async (req, res) => {
       }
     );
 
-    const bookings = await Booking.find().sort({ createdAt: -1 });
+    const bookings = await Booking.find()
+      .sort({ createdAt: -1 })
+      .populate("userId", "name email shortId");
 
     res.json(bookings);
 
