@@ -62,6 +62,18 @@ const bookingSchema = new mongoose.Schema(
 
     stripeSessionId: String,
 
+    // Cancellation reason
+    cancellationReason: {
+      type: String,
+      default: null
+    },
+
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null
+    },
+
     // Promo code tracking
     promoCode: {
       type: String,

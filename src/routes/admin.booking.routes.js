@@ -66,11 +66,16 @@ Example body: { "status": "confirmed" }
 */
 router.post("/:id/status", async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, reason } = req.body;
 
     const allowed = ["confirmed", "cancelled", "completed", "expired"];
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: "Invalid status. Must be: confirmed, cancelled, completed, or expired" });
+    }
+
+    // Require reason for cancellation
+    if (status === "cancelled" && (!reason || reason.trim().length < 5)) {
+      return res.status(400).json({ error: "A reason is required to cancel a booking (minimum 5 characters)" });
     }
 
     const booking = await Booking.findById(req.params.id);
@@ -97,6 +102,13 @@ router.post("/:id/status", async (req, res) => {
     }
 
     booking.status = status;
+
+    // Save cancellation reason and who cancelled it
+    if (status === "cancelled") {
+      booking.cancellationReason = reason.trim();
+      booking.cancelledBy = req.user.id;
+    }
+
     await booking.save();
 
     // Write to booking log for audit trail
@@ -104,7 +116,9 @@ router.post("/:id/status", async (req, res) => {
       bookingId: booking._id,
       action: status,
       performedBy: req.user.id,
-      note: `Status changed to ${status} by admin`
+      note: status === "cancelled"
+        ? `Cancelled by admin — Reason: ${reason}`
+        : `Status changed to ${status} by admin`
     });
 
     // Notify all connected clients in real time

@@ -212,6 +212,12 @@ Frontend calls: DELETE /api/admin/timer-sessions/:id
 */
 router.delete("/timer-sessions/:id", auth, requireAdmin, async (req, res) => {
   try {
+    const { reason } = req.body;
+
+    if (!reason || reason.trim().length < 5) {
+      return res.status(400).json({ error: "A reason is required to delete an invoice (minimum 5 characters)" });
+    }
+
     const session = await TimerSession.findByIdAndDelete(req.params.id);
 
     if (!session) {
@@ -224,7 +230,8 @@ router.delete("/timer-sessions/:id", auth, requireAdmin, async (req, res) => {
       details: {
         sessionId: session._id,
         tableName: session.tableName,
-        amountCharged: session.amountCharged
+        amountCharged: session.amountCharged,
+        reason: reason.trim()
       }
     });
 
