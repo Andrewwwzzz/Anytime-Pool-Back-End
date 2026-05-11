@@ -33,11 +33,27 @@ io.on("connection", (socket) => {
 CORS
 ========================================
 */
+const allowedOrigins = [
+  "https://envopoolsg.com",
+  "https://www.envopoolsg.com"
+];
+
 app.use(cors({
-  origin: [
-    "https://envopoolsg.com",
-    "https://www.envopoolsg.com"
-  ],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, ESP32)
+    if (!origin) return callback(null, true);
+
+    // Allow production domains
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    // Allow all Lovable preview URLs during development
+    if (origin.endsWith(".lovableproject.com") || origin.includes("lovable.dev")) {
+      return callback(null, true);
+    }
+
+    // Block everything else
+    callback(new Error("Not allowed by CORS"));
+  },
   allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
   credentials: true
 }));
