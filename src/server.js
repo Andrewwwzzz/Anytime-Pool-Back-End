@@ -34,8 +34,12 @@ CORS
 ========================================
 */
 app.use(cors({
-  origin: true,
-  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"]
+  origin: [
+    "https://envopoolsg.com",
+    "https://www.envopoolsg.com"
+  ],
+  allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
+  credentials: true
 }));
 
 /*
