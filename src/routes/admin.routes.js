@@ -259,6 +259,63 @@ router.delete("/timer-sessions/:id", auth, requireAdmin, async (req, res) => {
 });
 
 const PromoCode = require("../models/PromoCode");
+const PricingRule = require("../models/PricingRule");
+
+/*
+========================================
+PRICING RULES — stored in MongoDB
+========================================
+*/
+// Public endpoint — booking page needs pricing rules without admin auth
+router.get("/pricing-rules/public", async (req, res) => {
+  try {
+    const rules = await PricingRule.find({ is_active: true }).sort({ priority: -1 });
+    res.json(rules);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/pricing-rules", auth, requireAdmin, async (req, res) => {
+  try {
+    const rules = await PricingRule.find().sort({ priority: -1, createdAt: -1 });
+    res.json(rules);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/pricing-rules", auth, requireAdmin, async (req, res) => {
+  try {
+    const rule = await PricingRule.create(req.body);
+    res.json(rule);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch("/pricing-rules/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    const rule = await PricingRule.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    if (!rule) return res.status(404).json({ error: "Rule not found" });
+    res.json(rule);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/pricing-rules/:id", auth, requireAdmin, async (req, res) => {
+  try {
+    await PricingRule.findByIdAndDelete(req.params.id);
+    res.json({ message: "Pricing rule deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get("/promo-codes", auth, requireAdmin, async (req, res) => {
   try {
