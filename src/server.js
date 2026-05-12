@@ -70,6 +70,17 @@ app.use("/api/health", healthRoutes);
 
 /*
 ========================================
+JWKS ENDPOINT (Singpass MyInfo)
+Must be before body parsers and other routes.
+Singpass fetches this to verify your tokens.
+URL: https://api.envopoolsg.com/.well-known/jwks.json
+========================================
+*/
+const jwksRoutes = require("./routes/jwks.routes");
+app.use("/", jwksRoutes);
+
+/*
+========================================
 STRIPE WEBHOOK
 Must receive RAW body — define BEFORE express.json()
 ========================================
