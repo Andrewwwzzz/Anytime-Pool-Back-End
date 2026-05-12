@@ -11,12 +11,13 @@ const auth = require("../middleware/auth.middleware");
 ========================================
 REGISTER
 Creates a new user account.
+Supports both manual signup and Singpass KYC signup.
 isVerified starts as false — admin must verify before booking.
 ========================================
 */
 router.post("/register", async (req, res) => {
   try {
-    let { name, email, password } = req.body;
+    let { name, email, password, kycVerified, kycData } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -40,20 +41,42 @@ router.post("/register", async (req, res) => {
     let isUnique = false;
     while (!isUnique) {
       shortId = String(Math.floor(100000 + Math.random() * 900000));
-      const existing = await User.findOne({ shortId });
-      if (!existing) isUnique = true;
+      const existingShort = await User.findOne({ shortId });
+      if (!existingShort) isUnique = true;
     }
 
-    await User.create({
+    // Build user object — include KYC data if verified via Singpass
+    const newUser = {
       name,
       email,
       password: hashedPassword,
       shortId,
-      dateOfBirth: req.body.dateOfBirth || null
-    });
+      dateOfBirth: req.body.dateOfBirth || null,
+    };
+
+    // If user came through Singpass, mark KYC as verified immediately
+    if (kycVerified) {
+      newUser.kyc = {
+        verified: true,
+        verifiedAt: new Date(),
+        source: "singpass",
+        name: kycData?.name || name,
+        dob: kycData?.dob || null,
+        sex: kycData?.sex || null,
+        nationality: kycData?.nationality || null,
+        email: kycData?.email || email,
+        mobile: kycData?.mobile || null,
+        uinfin: kycData?.uinfin || null,
+        address: kycData?.address || null,
+      };
+    }
+
+    await User.create(newUser);
 
     res.json({
-      message: "Account created. Await admin verification."
+      message: kycVerified
+        ? "Account created and identity verified via Singpass."
+        : "Account created. Await admin verification."
     });
 
   } catch (error) {
@@ -103,7 +126,8 @@ router.post("/login", async (req, res) => {
         walletBalance: user.walletBalance,
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
-        dateOfBirth: user.dateOfBirth || null
+        dateOfBirth: user.dateOfBirth || null,
+        kyc: user.kyc || null,
       }
     });
 
@@ -142,7 +166,8 @@ router.get("/me", auth, async (req, res) => {
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
         shortId: user.shortId || null,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        kyc: user.kyc || null,
       }
     });
 
@@ -192,7 +217,6 @@ router.post("/update-profile", auth, async (req, res) => {
   try {
     const { name, phone, dateOfBirth } = req.body;
 
-    // Build update object — only include fields that were sent
     const updates = {};
     if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
@@ -205,7 +229,7 @@ router.post("/update-profile", auth, async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.user.id,
       { $set: updates },
-      { new: true }        // return the updated user
+      { new: true }
     ).select("-password");
 
     if (!user) {
@@ -225,7 +249,8 @@ router.post("/update-profile", auth, async (req, res) => {
         totalSpent: user.totalSpent,
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
-        dateOfBirth: user.dateOfBirth || null
+        dateOfBirth: user.dateOfBirth || null,
+        kyc: user.kyc || null,
       }
     });
 
