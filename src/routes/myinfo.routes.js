@@ -133,7 +133,7 @@ const decryptAndVerifyPersonData = async (encryptedData) => {
 
   const MYINFO_JWKS_URL = process.env.MYINFO_ENV === "production"
     ? "https://id.singpass.gov.sg/.well-known/keys"
-    : "https://test.id.singpass.gov.sg/.well-known/keys";
+    : "https://stg-id.singpass.gov.sg/.well-known/keys";
 
   const JWKS = createRemoteJWKSet(new URL(MYINFO_JWKS_URL));
   const { payload } = await flattenedVerify(jws, JWKS);
@@ -146,13 +146,13 @@ const getMyInfoUrls = () => {
   return {
     authorize: isProduction
       ? "https://id.singpass.gov.sg/auth"
-      : "https://test.id.singpass.gov.sg/auth",
+      : "https://stg-id.singpass.gov.sg/auth",
     token: isProduction
       ? "https://id.singpass.gov.sg/token"
-      : "https://test.id.singpass.gov.sg/token",
+      : "https://stg-id.singpass.gov.sg/token",
     userinfo: isProduction
       ? "https://id.singpass.gov.sg/userinfo"
-      : "https://test.id.singpass.gov.sg/userinfo",
+      : "https://stg-id.singpass.gov.sg/userinfo",
   };
 };
 
