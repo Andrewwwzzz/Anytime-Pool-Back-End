@@ -12,7 +12,6 @@ URL: https://api.envopoolsg.com/.well-known/jwks.json
 */
 router.get("/.well-known/jwks.json", (req, res) => {
   try {
-    // Read public keys from environment variables
     const rawSigningKey    = process.env.MYINFO_PUBLIC_SIGNING_KEY;
     const rawEncryptionKey = process.env.MYINFO_PUBLIC_ENCRYPTION_KEY;
 
@@ -21,15 +20,34 @@ router.get("/.well-known/jwks.json", (req, res) => {
       return res.status(500).json({ error: "Public keys not configured" });
     }
 
-    // Keys stored as JSON.stringify'd PEM strings — parse them back to real PEM
-    const signingPem    = JSON.parse(rawSigningKey);
-    const encryptionPem = JSON.parse(rawEncryptionKey);
+    // Log raw values to help debug (remove after fixing)
+    console.log("RAW SIGNING KEY:", rawSigningKey.substring(0, 80));
+    console.log("RAW ENCRYPTION KEY:", rawEncryptionKey.substring(0, 80));
 
-    // Convert PEM to JWK format
+    // Handle all possible formats the key could be stored in:
+    // 1. Already a real PEM (starts with -----BEGIN)
+    // 2. JSON.stringify'd PEM (starts with " or has \n as literal text)
+    const parsePem = (raw) => {
+      // If it's wrapped in quotes, it's a JSON string — parse it
+      if (raw.startsWith('"') && raw.endsWith('"')) {
+        return JSON.parse(raw);
+      }
+      // If it contains literal \n text (not real newlines), replace them
+      if (raw.includes("\\n")) {
+        return raw.replace(/\\n/g, "\n");
+      }
+      // Already a real PEM
+      return raw;
+    };
+
+    const signingPem    = parsePem(rawSigningKey);
+    const encryptionPem = parsePem(rawEncryptionKey);
+
+    console.log("PARSED SIGNING KEY START:", signingPem.substring(0, 40));
+
     const signingJwk    = createPublicKey(signingPem).export({ format: "jwk" });
     const encryptionJwk = createPublicKey(encryptionPem).export({ format: "jwk" });
 
-    // Return JWKS response
     res.json({
       keys: [
         {
@@ -47,8 +65,8 @@ router.get("/.well-known/jwks.json", (req, res) => {
       ],
     });
   } catch (err) {
-    console.error("❌ JWKS generation error:", err);
-    res.status(500).json({ error: "Failed to generate JWKS" });
+    console.error("❌ JWKS generation error:", err.message);
+    res.status(500).json({ error: "Failed to generate JWKS", detail: err.message });
   }
 });
 
