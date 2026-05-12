@@ -71,7 +71,7 @@ app.use("/api/health", healthRoutes);
 /*
 ========================================
 JWKS ENDPOINT (Singpass MyInfo)
-Must be before body parsers and other routes.
+Must be before body parsers.
 Singpass fetches this to verify your tokens.
 URL: https://api.envopoolsg.com/.well-known/jwks.json
 ========================================
@@ -117,6 +117,13 @@ const termsRoutes        = require("./routes/terms.routes");
 
 /*
 ========================================
+MYINFO ROUTE (Singpass KYC)
+========================================
+*/
+const myinfoRoutes = require("./routes/myinfo.routes");
+
+/*
+========================================
 EXPIRY JOB
 ========================================
 */
@@ -142,6 +149,7 @@ app.use("/api/availability",   availabilityRoutes);
 app.use("/api/setup",          setupRoutes);
 app.use("/api/promo",          promoRoutes);
 app.use("/api/terms",          termsRoutes);
+app.use("/api/myinfo",         myinfoRoutes);        // ✅ Singpass MyInfo KYC
 
 /*
 ========================================
