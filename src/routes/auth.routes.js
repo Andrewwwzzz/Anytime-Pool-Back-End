@@ -48,7 +48,8 @@ router.post("/register", async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      shortId
+      shortId,
+      dateOfBirth: req.body.dateOfBirth || null
     });
 
     res.json({
