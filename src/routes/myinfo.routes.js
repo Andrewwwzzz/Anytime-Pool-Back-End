@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
-const { SignJWT, importPKCS8, calculateJwkThumbprint, compactDecrypt, importJWK, flattenedVerify, createRemoteJWKSet } = require("jose");
-const { protect } = require("../middleware/auth");
+const { SignJWT, importPKCS8, calculateJwkThumbprint, compactDecrypt, createRemoteJWKSet, flattenedVerify } = require("jose");
+const protect = require("../middleware/auth");   // ✅ direct export, not { protect }
 const User = require("../models/user");
 
 /*
@@ -86,7 +86,6 @@ const generateDpopProof = async (ephemeralKeyPair, method, url, accessToken = nu
       .digest("base64url");
   }
 
-  // Sign with ephemeral private key using Web Crypto
   const header = {
     alg: "ES256",
     typ: "dpop+jwt",
@@ -335,8 +334,12 @@ router.get("/callback", async (req, res) => {
         ? [
             personData.regadd.block?.value,
             personData.regadd.street?.value,
-            personData.regadd.floor?.value ? `#${personData.regadd.floor.value}-${personData.regadd.unit?.value}` : null,
-            personData.regadd.postal?.value ? `Singapore ${personData.regadd.postal.value}` : null,
+            personData.regadd.floor?.value
+              ? `#${personData.regadd.floor.value}-${personData.regadd.unit?.value}`
+              : null,
+            personData.regadd.postal?.value
+              ? `Singapore ${personData.regadd.postal.value}`
+              : null,
           ]
             .filter(Boolean)
             .join(", ")
