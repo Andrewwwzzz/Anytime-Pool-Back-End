@@ -19,7 +19,7 @@ and puts their User ID in the payment reference
 */
 router.post("/request", auth, async (req, res) => {
   try {
-    const { amount, method } = req.body;
+    const { amount, method, paymentMethod, payment_method } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: "Invalid amount" });
@@ -30,7 +30,9 @@ router.post("/request", auth, async (req, res) => {
       return res.status(400).json({ error: "Minimum top up amount is $10" });
     }
 
-    const paymentMethod = method === "cash" ? "cash" : "paynow";
+    // Accept method from any field name the frontend might send
+    const rawMethod = method || paymentMethod || payment_method || "paynow";
+    const paymentMethod2 = rawMethod === "cash" ? "cash" : "paynow";
 
     // Check if user already has a pending request
     const existing = await TopUpRequest.findOne({
@@ -47,7 +49,7 @@ router.post("/request", auth, async (req, res) => {
     const request = await TopUpRequest.create({
       userId: req.user.id,
       amount,
-      method: paymentMethod
+      method: paymentMethod2
     });
 
     // Notify admin via socket
@@ -56,10 +58,10 @@ router.post("/request", auth, async (req, res) => {
       requestId: request._id,
       userId: req.user.id,
       amount,
-      method: paymentMethod
+      method: paymentMethod2
     });
 
-    const message = paymentMethod === "cash"
+    const message = paymentMethod2 === "cash"
       ? "Cash top up request submitted. Please head to the counter to pay."
       : "PayNow top up request submitted. Staff will credit your wallet once payment is verified.";
 
