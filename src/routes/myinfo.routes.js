@@ -180,7 +180,7 @@ const getSingpassUrls = () => {
   const base = prod ? "https://id.singpass.gov.sg" : "https://stg-id.singpass.gov.sg";
   return {
     par: `${base}/fapi/par`,
-    authorize: `${base}/auth`,
+    authorize: `${base}/fapi/auth`,
     token: `${base}/token`,
     userinfo: `${base}/userinfo`,
     issuer: base,
