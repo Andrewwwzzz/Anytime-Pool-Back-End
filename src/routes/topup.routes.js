@@ -19,7 +19,7 @@ and puts their User ID in the payment reference
 */
 router.post("/request", auth, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, method } = req.body;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ error: "Invalid amount" });
@@ -29,6 +29,8 @@ router.post("/request", auth, async (req, res) => {
     if (amount < 10) {
       return res.status(400).json({ error: "Minimum top up amount is $10" });
     }
+
+    const paymentMethod = method === "cash" ? "cash" : "paynow";
 
     // Check if user already has a pending request
     const existing = await TopUpRequest.findOne({
@@ -44,7 +46,8 @@ router.post("/request", auth, async (req, res) => {
 
     const request = await TopUpRequest.create({
       userId: req.user.id,
-      amount
+      amount,
+      method: paymentMethod
     });
 
     // Notify admin via socket
@@ -52,12 +55,17 @@ router.post("/request", auth, async (req, res) => {
     io.emit("topup_request_new", {
       requestId: request._id,
       userId: req.user.id,
-      amount
+      amount,
+      method: paymentMethod
     });
+
+    const message = paymentMethod === "cash"
+      ? "Cash top up request submitted. Please head to the counter to pay."
+      : "PayNow top up request submitted. Staff will credit your wallet once payment is verified.";
 
     res.json({
       success: true,
-      message: "Top up request submitted. Staff will credit your wallet once payment is verified.",
+      message,
       request
     });
 
@@ -154,12 +162,12 @@ router.post("/admin/requests/:id/approve", auth, async (req, res) => {
     request.adminNotes = adminNotes || null;
     await request.save();
 
-    // Create transaction record
+    // Create transaction record using actual payment method
     await Transaction.create({
       userId: user._id,
       amount: request.amount,
       type: "topup",
-      method: "paynow",
+      method: request.method || "paynow",
       status: "success"
     });
 

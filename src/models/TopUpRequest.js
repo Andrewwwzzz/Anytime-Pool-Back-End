@@ -13,6 +13,13 @@ const topUpRequestSchema = new mongoose.Schema(
       required: true
     },
 
+    // Payment method chosen by user
+    method: {
+      type: String,
+      enum: ["paynow", "cash"],
+      default: "paynow"
+    },
+
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],
