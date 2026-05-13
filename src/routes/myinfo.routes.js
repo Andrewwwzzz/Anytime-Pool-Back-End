@@ -138,7 +138,7 @@ const decryptAndVerifyUserinfo = async (encryptedData) => {
   const { plaintext } = await compactDecrypt(encryptedData, privateKey);
   const jws  = new TextDecoder().decode(plaintext);
   const JWKS = createRemoteJWKSet(new URL(getSingpassJwksUrl()));
-  const { payload } = await jwtVerify(jws, JWKS, { issuer: getSingpassIssuer() });
+  const { payload } = await jwtVerify(jws, JWKS, { issuer: getSingpassFapiIssuer() });
   return payload;
 };
 
@@ -149,6 +149,7 @@ SINGPASS URLS
 */
 const isProd             = () => process.env.MYINFO_ENV === "production";
 const getSingpassIssuer  = () => isProd() ? "https://id.singpass.gov.sg" : "https://stg-id.singpass.gov.sg";
+const getSingpassFapiIssuer = () => `${getSingpassIssuer()}/fapi`;
 const getSingpassJwksUrl = () => `${getSingpassIssuer()}/.well-known/keys`;
 const getSingpassUrls    = () => {
   const base = getSingpassIssuer();
@@ -156,7 +157,7 @@ const getSingpassUrls    = () => {
     par:      `${base}/fapi/par`,
     authorize:`${base}/fapi/auth`,
     token:    `${base}/fapi/token`,
-    userinfo: `${base}/userinfo`,  // NOTE: no trailing slash
+    userinfo: `${base}/fapi/userinfo`,
   };
 };
 
