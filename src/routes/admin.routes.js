@@ -49,10 +49,34 @@ router.get("/unverified-users", auth, requireAdmin, async (req, res) => {
 
 router.post("/verify-user", auth, requireAdmin, async (req, res) => {
   try {
-    const { userId } = req.body;
-    const user = await User.findByIdAndUpdate(userId, { isVerified: true }, { new: true }).select("-password");
+    const { userId, legalName, dateOfBirth } = req.body;
+
+    if (!legalName || !dateOfBirth) {
+      return res.status(400).json({ error: "Legal name and date of birth are required for manual verification" });
+    }
+
+    const updates = {
+      isVerified: true,
+      dateOfBirth,
+      kyc: {
+        verified:    true,
+        verifiedAt:  new Date(),
+        source:      "manual",
+        name:        legalName,
+        dob:         dateOfBirth,
+      }
+    };
+
+    const user = await User.findByIdAndUpdate(userId, updates, { new: true }).select("-password");
     if (!user) return res.status(404).json({ error: "User not found" });
-    await AdminLog.create({ adminId: req.user.id, action: "verify_user", targetUserId: userId, details: { userName: user.name, email: user.email } });
+
+    await AdminLog.create({
+      adminId: req.user.id,
+      action: "verify_user",
+      targetUserId: userId,
+      details: { userName: user.name, legalName, dateOfBirth, email: user.email }
+    });
+
     const io = req.app.get("io");
     io.emit("users_updated");
     res.json({ message: "User verified successfully", user });
