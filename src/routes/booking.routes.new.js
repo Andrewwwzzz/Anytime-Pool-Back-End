@@ -4,6 +4,7 @@ const router = express.Router();
 const Booking = require("../models/Booking");
 const BookingLog = require("../models/BookingLog");
 const User = require("../models/user");
+const Transaction = require("../models/Transaction");
 
 const auth = require("../middleware/auth.middleware");
 
@@ -20,7 +21,7 @@ or /api/payments/checkout
 */
 router.post("/", auth, async (req, res) => {
   try {
-    const { tableId, startTime, endTime, amount, promoCode, promoDiscount, originalAmount } = req.body;
+    const { tableId, startTime, endTime, amount, promoCode, promoDiscount, originalAmount, rewardCode } = req.body;
 
     // Fetch the full user to check verification status
     const user = await User.findById(req.user.id);
@@ -33,8 +34,28 @@ router.post("/", auth, async (req, res) => {
       return res.status(403).json({ error: "Account not verified. Please wait for admin approval." });
     }
 
-    if (!amount || amount <= 0) {
+    // Allow $0 only when a valid reward code is attached
+    const isFreeReward = rewardCode && amount === 0;
+
+    if (!isFreeReward && (!amount || amount <= 0)) {
       return res.status(400).json({ error: "Invalid amount" });
+    }
+
+    // Validate reward code if provided
+    let reward = null;
+    if (rewardCode) {
+      const Reward = require("../models/Reward");
+      reward = await Reward.findOne({
+        code: rewardCode.toUpperCase(),
+        userId: req.user.id,
+        isRedeemed: false
+      });
+      if (!reward) {
+        return res.status(400).json({ error: "Invalid or already used reward code" });
+      }
+      if (reward.expiresAt && reward.expiresAt < new Date()) {
+        return res.status(400).json({ error: "Reward code has expired" });
+      }
     }
 
     if (!tableId || !startTime || !endTime) {
@@ -79,12 +100,33 @@ router.post("/", auth, async (req, res) => {
       startTime: start,
       endTime: end,
       amount,
-      status: "pending_payment",
+      status: isFreeReward ? "confirmed" : "pending_payment",
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       promoCode: promoCode || null,
       promoDiscount: promoDiscount || 0,
-      originalAmount: originalAmount || amount
+      originalAmount: originalAmount || amount,
+      rewardCode: rewardCode || null,
+      paymentMethod: isFreeReward ? "reward" : null,
+      paidAt: isFreeReward ? new Date() : null
     });
+
+    // If free reward — mark it redeemed immediately
+    if (isFreeReward && reward) {
+      reward.isRedeemed = true;
+      reward.redeemedAt = new Date();
+      reward.redeemedOnBookingId = booking._id;
+      await reward.save();
+
+      // Create $0 transaction for record keeping
+      await Transaction.create({
+        userId: user._id,
+        bookingId: booking._id,
+        amount: 0,
+        type: "payment",
+        method: "reward",
+        status: "success"
+      });
+    }
 
     // Log the booking creation
     await BookingLog.create({

@@ -95,6 +95,8 @@ const authRoutes         = require("./routes/auth.routes");
 const adminRoutes        = require("./routes/admin.routes");
 const adminBookingRoutes = require("./routes/admin.booking.routes");
 const maintenanceRoutes  = require("./routes/maintenance.routes");
+const rewardRoutes       = require("./routes/reward.routes");
+const rewardRoutes       = require("./routes/reward.routes");
 const tableRoutes        = require("./routes/table.routes");
 const userRoutes         = require("./routes/user.routes");
 const transactionRoutes  = require("./routes/transaction.routes");
@@ -121,7 +123,9 @@ app.use("/api/bookings",       bookingRoutes);
 app.use("/api/payments",       paymentRoutes);
 app.use("/api/auth",           authRoutes);
 app.use("/api/admin/bookings", adminBookingRoutes);  // ✅ more specific — must come FIRST
-app.use("/api/admin/maintenance", maintenanceRoutes); // ✅ more specific — must come before /api/admin
+app.use("/api/admin/maintenance", maintenanceRoutes);
+app.use("/api/rewards",          rewardRoutes);
+app.use("/api/rewards",          rewardRoutes); // ✅ more specific — must come before /api/admin
 app.use("/api/admin",          adminRoutes);
 app.use("/api/tables",         tableRoutes);
 app.use("/api/users",          userRoutes);
