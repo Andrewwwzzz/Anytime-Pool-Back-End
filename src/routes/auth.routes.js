@@ -16,7 +16,7 @@ isVerified starts as false — admin must verify before booking.
 */
 router.post("/register", async (req, res) => {
   try {
-    let { name, email, password, kycVerified, kycData } = req.body;
+    let { name, email, password, phone, kycVerified, kycData } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -67,6 +67,7 @@ router.post("/register", async (req, res) => {
       email,
       password: hashedPassword,
       shortId,
+      phone: phone || null,
       // Pre-fill dateOfBirth from KYC if available
       dateOfBirth: (kyc && kyc.dob) ? kyc.dob : (req.body.dateOfBirth || null),
       ...(kyc && { kyc }),
