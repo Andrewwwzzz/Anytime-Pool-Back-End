@@ -59,7 +59,7 @@ router.get("/.well-known/jwks.json", (req, res) => {
         {
           ...encryptionJwk,
           use: "enc",
-          alg: "ECDH-ES+A128GCM",
+          alg: "ECDH-ES",
           kid: "envopool-enc-1",
         },
       ],
