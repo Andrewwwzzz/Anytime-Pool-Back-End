@@ -1,8 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const requireAdmin = require("../middleware/role.middleware");
 const MaintenanceWindow = require("../models/MaintenanceWindow");
+
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access only" });
+  }
+  next();
+}
 
 /*
 ========================================
