@@ -11,7 +11,6 @@ const auth = require("../middleware/auth.middleware");
 ========================================
 REGISTER
 Creates a new user account.
-Supports both manual signup and Singpass KYC signup.
 isVerified starts as false — admin must verify before booking.
 ========================================
 */
@@ -41,42 +40,40 @@ router.post("/register", async (req, res) => {
     let isUnique = false;
     while (!isUnique) {
       shortId = String(Math.floor(100000 + Math.random() * 900000));
-      const existingShort = await User.findOne({ shortId });
-      if (!existingShort) isUnique = true;
+      const existing = await User.findOne({ shortId });
+      if (!existing) isUnique = true;
     }
 
-    // Build user object — include KYC data if verified via Singpass
-    const newUser = {
+    // Build kyc subdocument if Singpass-verified signup
+    let kyc = null;
+    if (kycVerified && kycData) {
+      kyc = {
+        verified:    true,
+        verifiedAt:  new Date(),
+        source:      "singpass",
+        name:        kycData.name        || null,
+        dob:         kycData.dob         || null,
+        sex:         kycData.sex         || null,
+        nationality: kycData.nationality || null,
+        email:       kycData.email       || null,
+        mobile:      kycData.mobile      || null,
+        uinfin:      kycData.uinfin      || null,
+        address:     kycData.address     || null,
+      };
+    }
+
+    await User.create({
       name,
       email,
       password: hashedPassword,
       shortId,
-      dateOfBirth: req.body.dateOfBirth || null,
-    };
-
-    // If user came through Singpass, mark KYC as verified immediately
-    if (kycVerified) {
-      newUser.kyc = {
-        verified: true,
-        verifiedAt: new Date(),
-        source: "singpass",
-        name: kycData?.name || name,
-        dob: kycData?.dob || null,
-        sex: kycData?.sex || null,
-        nationality: kycData?.nationality || null,
-        email: kycData?.email || email,
-        mobile: kycData?.mobile || null,
-        uinfin: kycData?.uinfin || null,
-        address: kycData?.address || null,
-      };
-    }
-
-    await User.create(newUser);
+      // Pre-fill dateOfBirth from KYC if available
+      dateOfBirth: (kyc && kyc.dob) ? kyc.dob : (req.body.dateOfBirth || null),
+      ...(kyc && { kyc }),
+    });
 
     res.json({
-      message: kycVerified
-        ? "Account created and identity verified via Singpass."
-        : "Account created. Await admin verification."
+      message: "Account created. Await admin verification."
     });
 
   } catch (error) {
@@ -127,7 +124,7 @@ router.post("/login", async (req, res) => {
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
-        kyc: user.kyc || null,
+        kyc: user.kyc || null
       }
     });
 
@@ -167,7 +164,7 @@ router.get("/me", auth, async (req, res) => {
         dateOfBirth: user.dateOfBirth || null,
         shortId: user.shortId || null,
         createdAt: user.createdAt,
-        kyc: user.kyc || null,
+        kyc: user.kyc || null
       }
     });
 
@@ -217,10 +214,25 @@ router.post("/update-profile", auth, async (req, res) => {
   try {
     const { name, phone, dateOfBirth } = req.body;
 
+    // Fetch current user to check KYC status
+    const currentUser = await User.findById(req.user.id);
+    if (!currentUser) return res.status(404).json({ error: "User not found" });
+
+    const isKyc = currentUser.kyc && currentUser.kyc.verified;
+
+    // Build update object — only include fields that were sent
     const updates = {};
-    if (name !== undefined) updates.name = name;
     if (phone !== undefined) updates.phone = phone;
-    if (dateOfBirth !== undefined) updates.dateOfBirth = dateOfBirth;
+
+    // KYC users cannot change their name or date of birth
+    if (name !== undefined) {
+      if (isKyc) return res.status(403).json({ error: "Name cannot be changed for Singpass-verified accounts" });
+      updates.name = name;
+    }
+    if (dateOfBirth !== undefined) {
+      if (isKyc) return res.status(403).json({ error: "Date of birth cannot be changed for Singpass-verified accounts" });
+      updates.dateOfBirth = dateOfBirth;
+    }
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: "No fields to update" });
@@ -250,7 +262,7 @@ router.post("/update-profile", auth, async (req, res) => {
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
-        kyc: user.kyc || null,
+        kyc: user.kyc || null
       }
     });
 

@@ -37,13 +37,13 @@ const userSchema = new mongoose.Schema(
       default: 0
     },
 
-    // ✅ reward points system
+    // ✅ Added: reward points system
     rewardPoints: {
       type: Number,
       default: 0
     },
 
-    // ✅ profile fields
+    // ✅ Added: profile fields the frontend Settings page uses
     phone: {
       type: String,
       default: null
@@ -54,13 +54,13 @@ const userSchema = new mongoose.Schema(
       default: null
     },
 
-    // ✅ controls whether user name shows on booking grid
+    // ✅ Added: controls whether user name shows on booking grid
     showName: {
       type: Boolean,
       default: true
     },
 
-    // ✅ Short numeric ID for PayNow reference
+    // ✅ Short numeric ID for PayNow reference (e.g. 123456)
     shortId: {
       type: String,
       unique: true,
@@ -69,51 +69,18 @@ const userSchema = new mongoose.Schema(
 
     // ✅ Singpass MyInfo KYC verification
     kyc: {
-      verified: {
-        type: Boolean,
-        default: false
-      },
-      verifiedAt: {
-        type: Date,
-        default: null
-      },
-      source: {
-        type: String,
-        default: null   // "singpass"
-      },
-      name: {
-        type: String,
-        default: null
-      },
-      dob: {
-        type: String,
-        default: null
-      },
-      sex: {
-        type: String,
-        default: null
-      },
-      nationality: {
-        type: String,
-        default: null
-      },
-      email: {
-        type: String,
-        default: null
-      },
-      mobile: {
-        type: String,
-        default: null
-      },
-      uinfin: {
-        type: String,
-        default: null   // Masked NRIC e.g. "S****123A"
-      },
-      address: {
-        type: String,
-        default: null
-      },
-    },
+      verified:   { type: Boolean, default: false },
+      verifiedAt: { type: Date,    default: null },
+      source:     { type: String,  default: null }, // "myinfo"
+      name:       { type: String,  default: null },
+      dob:        { type: String,  default: null }, // YYYY-MM-DD
+      sex:        { type: String,  default: null },
+      nationality:{ type: String,  default: null },
+      email:      { type: String,  default: null },
+      mobile:     { type: String,  default: null },
+      uinfin:     { type: String,  default: null },
+      address:    { type: String,  default: null },
+    }
   },
   { timestamps: true }
 );
