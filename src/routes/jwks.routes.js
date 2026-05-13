@@ -5,8 +5,10 @@ const { createPublicKey } = require("crypto");
 /*
 ========================================
 JWKS ENDPOINT
-Required by Singpass MyInfo for token-based authentication.
-Serves your public keys in JWKS format so Singpass can verify your tokens.
+Required by Singpass MyInfo FAPI 2.0.
+Serves your public keys in JWKS format.
+- Signing key: EC P-256 (ES256)
+- Encryption key: RSA 2048 (RSA-OAEP-256)
 URL: https://api.envopoolsg.com/.well-known/jwks.json
 ========================================
 */
@@ -20,30 +22,15 @@ router.get("/.well-known/jwks.json", (req, res) => {
       return res.status(500).json({ error: "Public keys not configured" });
     }
 
-    // Log raw values to help debug (remove after fixing)
-    console.log("RAW SIGNING KEY:", rawSigningKey.substring(0, 80));
-    console.log("RAW ENCRYPTION KEY:", rawEncryptionKey.substring(0, 80));
-
-    // Handle all possible formats the key could be stored in:
-    // 1. Already a real PEM (starts with -----BEGIN)
-    // 2. JSON.stringify'd PEM (starts with " or has \n as literal text)
+    // Parse PEM — handles JSON-stringified or raw PEM
     const parsePem = (raw) => {
-      // If it's wrapped in quotes, it's a JSON string — parse it
-      if (raw.startsWith('"') && raw.endsWith('"')) {
-        return JSON.parse(raw);
-      }
-      // If it contains literal \n text (not real newlines), replace them
-      if (raw.includes("\\n")) {
-        return raw.replace(/\\n/g, "\n");
-      }
-      // Already a real PEM
+      if (raw.startsWith('"') && raw.endsWith('"')) return JSON.parse(raw);
+      if (raw.includes("\\n")) return raw.replace(/\\n/g, "\n");
       return raw;
     };
 
     const signingPem    = parsePem(rawSigningKey);
     const encryptionPem = parsePem(rawEncryptionKey);
-
-    console.log("PARSED SIGNING KEY START:", signingPem.substring(0, 40));
 
     const signingJwk    = createPublicKey(signingPem).export({ format: "jwk" });
     const encryptionJwk = createPublicKey(encryptionPem).export({ format: "jwk" });
@@ -59,7 +46,7 @@ router.get("/.well-known/jwks.json", (req, res) => {
         {
           ...encryptionJwk,
           use: "enc",
-          alg: "ECDH-ES",
+          alg: "RSA-OAEP-256",
           kid: "envopool-enc-1",
         },
       ],
