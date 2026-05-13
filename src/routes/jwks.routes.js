@@ -6,9 +6,8 @@ const { createPublicKey } = require("crypto");
 ========================================
 JWKS ENDPOINT
 Required by Singpass MyInfo FAPI 2.0.
-Serves your public keys in JWKS format.
-- Signing key: EC P-256 (ES256)
-- Encryption key: RSA 2048 (RSA-OAEP-256)
+- Signing key:    EC P-256 / ES256
+- Encryption key: EC P-256 / ECDH-ES+A128KW  ← required by Singpass for new RPs
 URL: https://api.envopoolsg.com/.well-known/jwks.json
 ========================================
 */
@@ -29,11 +28,12 @@ router.get("/.well-known/jwks.json", (req, res) => {
       return raw;
     };
 
-    const signingPem    = parsePem(rawSigningKey);
-    const encryptionPem = parsePem(rawEncryptionKey);
+    const signingJwk    = createPublicKey(parsePem(rawSigningKey)).export({ format: "jwk" });
+    const encryptionJwk = createPublicKey(parsePem(rawEncryptionKey)).export({ format: "jwk" });
 
-    const signingJwk    = createPublicKey(signingPem).export({ format: "jwk" });
-    const encryptionJwk = createPublicKey(encryptionPem).export({ format: "jwk" });
+    // Never expose private key — remove 'd' if somehow present
+    delete signingJwk.d;
+    delete encryptionJwk.d;
 
     res.json({
       keys: [
@@ -46,8 +46,8 @@ router.get("/.well-known/jwks.json", (req, res) => {
         {
           ...encryptionJwk,
           use: "enc",
-          alg: "RSA-OAEP-256",
-          kid: "envopool-enc-2",
+          alg: "ECDH-ES+A128KW",
+          kid: "envopool-enc-3",
         },
       ],
     });

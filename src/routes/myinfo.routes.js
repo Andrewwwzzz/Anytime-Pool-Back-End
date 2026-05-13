@@ -153,7 +153,7 @@ const generateClientAssertion = async (clientId, audience) => {
 // Decrypt JWE → get JWS → verify JWS → return person data
 const decryptAndVerifyUserinfo = async (encryptedData) => {
   const encryptionKeyPem = parsePem(process.env.MYINFO_PRIVATE_ENCRYPTION_KEY);
-  const privateKey = await importPKCS8(encryptionKeyPem, "RSA-OAEP-256");
+  const privateKey = await importPKCS8(encryptionKeyPem, "ECDH-ES+A128KW");
 
   // Step 1: Decrypt JWE
   const { plaintext } = await compactDecrypt(encryptedData, privateKey);
