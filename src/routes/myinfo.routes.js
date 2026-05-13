@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
+const mongoose = require("mongoose");
 const {
   SignJWT,
   importPKCS8,
@@ -15,40 +16,55 @@ const User = require("../models/user");
 /*
 ========================================
 SINGPASS MYINFO v5 — FAPI 2.0 Integration
-Flow:
-  1. Backend POSTs auth params to /fapi/par → gets request_uri
-  2. Backend redirects browser to /fapi/auth?client_id=...&request_uri=...
-  3. User logs in on Singpass
-  4. Singpass redirects to /api/myinfo/callback?code=...&state=...
-  5. Backend POSTs to /fapi/token to exchange code for access_token
-  6. Backend GETs /userinfo with DPoP-bound access token
-  7. Backend decrypts + verifies userinfo JWE/JWS
-  8. Backend saves KYC to MongoDB or passes data to frontend signup
+
+Key facts from official docs:
+- PAR → /fapi/par (with DPoP header)
+- Auth → /fapi/auth?client_id=...&request_uri=...
+- Token → /fapi/token (with DPoP header)
+- Userinfo → /userinfo (Authorization: DPoP <token> + DPoP header)
+- Same ephemeral key pair MUST be used across PAR, Token, Userinfo
+- Sessions stored in MongoDB (not in-memory) to survive Render restarts
 ========================================
 */
 
 /*
 ========================================
-IN-MEMORY SESSION STORE
+MONGODB SESSION STORE
+Stores ephemeral key pair + PKCE between
+PAR request and callback.
+Uses mongoose directly on a simple collection.
 ========================================
 */
-const sessions = new Map();
+const myinfoSessionSchema = new mongoose.Schema({
+  state:             { type: String, required: true, unique: true },
+  codeVerifier:      { type: String, required: true },
+  nonce:             { type: String, required: true },
+  userId:            { type: String, default: null },
+  isSignup:          { type: Boolean, default: false },
+  // Store ephemeral key pair as JWK JSON strings
+  ephemeralPublicJwk:  { type: String, required: true },
+  ephemeralPrivateJwk: { type: String, required: true },
+  createdAt:         { type: Date, default: Date.now, expires: 600 }, // auto-delete after 10 min
+});
 
-const setSession = (state, data) => {
-  sessions.set(state, { ...data, createdAt: Date.now() });
+const MyInfoSession = mongoose.models.MyInfoSession ||
+  mongoose.model("MyInfoSession", myinfoSessionSchema);
+
+const saveSession = async (state, data) => {
+  await MyInfoSession.findOneAndUpdate(
+    { state },
+    { ...data, state },
+    { upsert: true, new: true }
+  );
 };
 
-const getSession = (state) => {
-  const session = sessions.get(state);
-  if (!session) return null;
-  if (Date.now() - session.createdAt > 10 * 60 * 1000) {
-    sessions.delete(state);
-    return null;
-  }
-  return session;
+const loadSession = async (state) => {
+  return await MyInfoSession.findOne({ state });
 };
 
-const deleteSession = (state) => sessions.delete(state);
+const deleteSession = async (state) => {
+  await MyInfoSession.deleteOne({ state });
+};
 
 /*
 ========================================
@@ -72,20 +88,37 @@ const generatePKCE = () => {
   return { codeVerifier, codeChallenge };
 };
 
+// Generate ephemeral key pair and export as JWK for storage in MongoDB
 const generateEphemeralKeyPair = async () => {
   const { privateKey, publicKey } = await crypto.subtle.generateKey(
     { name: "ECDSA", namedCurve: "P-256" },
-    true,
+    true,  // extractable = true so we can export to JWK
     ["sign", "verify"]
   );
-  const publicJwk = await crypto.subtle.exportKey("jwk", publicKey);
+  const publicJwk  = await crypto.subtle.exportKey("jwk", publicKey);
+  const privateJwk = await crypto.subtle.exportKey("jwk", privateKey);
   const thumbprint = await calculateJwkThumbprint(publicJwk);
-  return { privateKey, publicKey, publicJwk, thumbprint };
+  return { publicJwk, privateJwk, thumbprint };
 };
 
-const generateDpopProof = async (ephemeralKeyPair, method, url, accessToken = null) => {
-  const { privateKey, publicJwk } = ephemeralKeyPair;
+// Restore ephemeral key pair from stored JWK strings
+const restoreEphemeralKeyPair = async (publicJwkStr, privateJwkStr) => {
+  const publicJwk  = JSON.parse(publicJwkStr);
+  const privateJwk = JSON.parse(privateJwkStr);
 
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    privateJwk,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+
+  return { privateKey, publicJwk };
+};
+
+// Generate DPoP proof JWT
+const generateDpopProof = async (privateKey, publicJwk, method, url, accessToken = null) => {
   const payload = {
     jti: crypto.randomUUID(),
     htm: method,
@@ -107,8 +140,8 @@ const generateDpopProof = async (ephemeralKeyPair, method, url, accessToken = nu
     jwk: {
       kty: publicJwk.kty,
       crv: publicJwk.crv,
-      x: publicJwk.x,
-      y: publicJwk.y,
+      x:   publicJwk.x,
+      y:   publicJwk.y,
     },
   };
 
@@ -125,10 +158,10 @@ const generateDpopProof = async (ephemeralKeyPair, method, url, accessToken = nu
   return `${signingInput}.${Buffer.from(signature).toString("base64url")}`;
 };
 
-// For FAPI 2.0: do NOT include cnf.jkt in client assertion
+// Generate client assertion JWT (no cnf.jkt for FAPI 2.0)
 const generateClientAssertion = async (clientId, audience) => {
   const signingKeyPem = parsePem(process.env.MYINFO_PRIVATE_SIGNING_KEY);
-  const privateKey = await importPKCS8(signingKeyPem, "ES256");
+  const privateKey    = await importPKCS8(signingKeyPem, "ES256");
 
   return new SignJWT({
     sub: clientId,
@@ -142,17 +175,16 @@ const generateClientAssertion = async (clientId, audience) => {
     .sign(privateKey);
 };
 
+// Decrypt JWE → verify JWS → return person payload
 const decryptAndVerifyUserinfo = async (encryptedData) => {
   const encryptionKeyPem = parsePem(process.env.MYINFO_PRIVATE_ENCRYPTION_KEY);
+  const privateKey       = await importPKCS8(encryptionKeyPem, "ECDH-ES+A128KW");
 
-  // Import EC private key for ECDH-ES+A128KW decryption
-  const privateKey = await importPKCS8(encryptionKeyPem, "ECDH-ES+A128KW");
-
-  // Step 1: Decrypt JWE
+  // Decrypt JWE
   const { plaintext } = await compactDecrypt(encryptedData, privateKey);
   const jws = new TextDecoder().decode(plaintext);
 
-  // Step 2: Verify JWS with Singpass public keys
+  // Verify JWS signature using Singpass public keys
   const JWKS = createRemoteJWKSet(new URL(getSingpassJwksUrl()));
   const { payload } = await jwtVerify(jws, JWKS, {
     issuer: getSingpassIssuer(),
@@ -166,29 +198,23 @@ const decryptAndVerifyUserinfo = async (encryptedData) => {
 SINGPASS URLS
 ========================================
 */
-const isProd = () => process.env.MYINFO_ENV === "production";
-
-const getSingpassIssuer = () =>
-  isProd() ? "https://id.singpass.gov.sg" : "https://stg-id.singpass.gov.sg";
-
-const getSingpassJwksUrl = () =>
-  isProd()
-    ? "https://id.singpass.gov.sg/.well-known/keys"
-    : "https://stg-id.singpass.gov.sg/.well-known/keys";
+const isProd        = () => process.env.MYINFO_ENV === "production";
+const getSingpassIssuer  = () => isProd() ? "https://id.singpass.gov.sg" : "https://stg-id.singpass.gov.sg";
+const getSingpassJwksUrl = () => `${getSingpassIssuer()}/.well-known/keys`;
 
 const getSingpassUrls = () => {
   const base = getSingpassIssuer();
   return {
-    par:       `${base}/fapi/par`,
-    authorize: `${base}/fapi/auth`,
-    token:     `${base}/fapi/token`,
-    userinfo:  `${base}/userinfo`,
+    par:      `${base}/fapi/par`,
+    authorize:`${base}/fapi/auth`,
+    token:    `${base}/fapi/token`,
+    userinfo: `${base}/userinfo`,
   };
 };
 
 /*
 ========================================
-SHARED: PAR flow — build authorize URL
+SHARED: Full PAR flow
 ========================================
 */
 const buildAuthorizeUrl = async (userId = null) => {
@@ -197,25 +223,34 @@ const buildAuthorizeUrl = async (userId = null) => {
   const redirectUri = process.env.MYINFO_REDIRECT_URL;
   const scope     = process.env.MYINFO_SCOPE || "openid name";
 
-  const state    = crypto.randomBytes(16).toString("hex");
-  const nonce    = crypto.randomBytes(16).toString("hex");
+  const state = crypto.randomBytes(16).toString("hex");
+  const nonce = crypto.randomBytes(16).toString("hex");
   const { codeVerifier, codeChallenge } = generatePKCE();
-  const ephemeralKeyPair = await generateEphemeralKeyPair();
 
+  // Generate ephemeral key pair — export to JWK for MongoDB storage
+  const { publicJwk, privateJwk, thumbprint } = await generateEphemeralKeyPair();
+
+  // Restore private key for signing DPoP proof
+  const { privateKey } = await restoreEphemeralKeyPair(
+    JSON.stringify(publicJwk),
+    JSON.stringify(privateJwk)
+  );
+
+  // Generate client assertion + DPoP for PAR
   const clientAssertion = await generateClientAssertion(clientId, urls.par);
-  const dpopForPar      = await generateDpopProof(ephemeralKeyPair, "POST", urls.par);
+  const dpopForPar      = await generateDpopProof(privateKey, publicJwk, "POST", urls.par);
 
   const parBody = new URLSearchParams({
-    client_id:              clientId,
+    client_id:             clientId,
     scope,
-    redirect_uri:           redirectUri,
-    response_type:          "code",
-    code_challenge:         codeChallenge,
-    code_challenge_method:  "S256",
+    redirect_uri:          redirectUri,
+    response_type:         "code",
+    code_challenge:        codeChallenge,
+    code_challenge_method: "S256",
     state,
     nonce,
-    client_assertion_type:  "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-    client_assertion:       clientAssertion,
+    client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+    client_assertion:      clientAssertion,
   });
 
   const parResponse = await fetch(urls.par, {
@@ -230,18 +265,20 @@ const buildAuthorizeUrl = async (userId = null) => {
   if (!parResponse.ok) {
     const errText = await parResponse.text();
     console.error("❌ PAR request failed:", errText);
-    throw new Error(`PAR request failed: ${parResponse.status}`);
+    throw new Error(`PAR failed: ${parResponse.status} — ${errText}`);
   }
 
   const { request_uri } = await parResponse.json();
   if (!request_uri) throw new Error("No request_uri in PAR response");
 
-  setSession(state, {
+  // Save session to MongoDB (survives Render restarts)
+  await saveSession(state, {
     codeVerifier,
-    ephemeralKeyPair,
     nonce,
     userId,
-    isSignup: !userId,
+    isSignup:            !userId,
+    ephemeralPublicJwk:  JSON.stringify(publicJwk),
+    ephemeralPrivateJwk: JSON.stringify(privateJwk),
   });
 
   return `${urls.authorize}?client_id=${clientId}&request_uri=${encodeURIComponent(request_uri)}`;
@@ -265,7 +302,7 @@ router.post("/auth-url-public", async (req, res) => {
 
 /*
 ========================================
-ROUTE 1B: Protected auth URL (logged-in flow)
+ROUTE 1B: Protected auth URL (logged-in)
 POST /api/myinfo/auth-url
 ========================================
 */
@@ -290,7 +327,7 @@ router.get("/callback", async (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || "https://envopoolsg.com";
 
   if (error) {
-    console.error("❌ MyInfo callback error:", error, error_description);
+    console.error("❌ Singpass error:", error, error_description);
     return res.redirect(`${frontendUrl}/kyc?error=${encodeURIComponent(error)}`);
   }
 
@@ -298,29 +335,37 @@ router.get("/callback", async (req, res) => {
     return res.redirect(`${frontendUrl}/kyc?error=missing_params`);
   }
 
-  const session = getSession(state);
+  // Load session from MongoDB
+  const session = await loadSession(state);
   if (!session) {
+    console.error("❌ Session not found for state:", state);
     return res.redirect(`${frontendUrl}/kyc?error=session_expired`);
   }
 
-  const { codeVerifier, ephemeralKeyPair, userId, isSignup } = session;
+  const { codeVerifier, ephemeralPublicJwk, ephemeralPrivateJwk, userId, isSignup } = session;
   const urls        = getSingpassUrls();
   const clientId    = process.env.MYINFO_CLIENT_ID;
   const redirectUri = process.env.MYINFO_REDIRECT_URL;
 
   try {
+    // Restore the SAME ephemeral key pair used during PAR
+    const { privateKey, publicJwk } = await restoreEphemeralKeyPair(
+      ephemeralPublicJwk,
+      ephemeralPrivateJwk
+    );
+
     // ── Step 1: Exchange auth code for access token ──
     const clientAssertion = await generateClientAssertion(clientId, urls.token);
-    const dpopForToken    = await generateDpopProof(ephemeralKeyPair, "POST", urls.token);
+    const dpopForToken    = await generateDpopProof(privateKey, publicJwk, "POST", urls.token);
 
     const tokenBody = new URLSearchParams({
-      grant_type:             "authorization_code",
+      grant_type:            "authorization_code",
       code,
-      redirect_uri:           redirectUri,
-      client_id:              clientId,
-      code_verifier:          codeVerifier,
-      client_assertion_type:  "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
-      client_assertion:       clientAssertion,
+      redirect_uri:          redirectUri,
+      client_id:             clientId,
+      code_verifier:         codeVerifier,
+      client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      client_assertion:      clientAssertion,
     });
 
     const tokenResponse = await fetch(urls.token, {
@@ -335,57 +380,64 @@ router.get("/callback", async (req, res) => {
     if (!tokenResponse.ok) {
       const errText = await tokenResponse.text();
       console.error("❌ Token exchange failed:", errText);
-      deleteSession(state);
+      await deleteSession(state);
       return res.redirect(`${frontendUrl}/kyc?error=token_failed`);
     }
 
-    const tokenData = await tokenResponse.json();
+    const tokenData      = await tokenResponse.json();
     const { access_token } = tokenData;
-
     console.log("✅ Token exchange success");
 
-    // ── Step 2: Fetch userinfo — uses Bearer token (no DPoP for userinfo) ──
+    // ── Step 2: Fetch userinfo ──
+    // Must use SAME ephemeral key pair, DPoP prefix, and ath (access token hash)
+    const dpopForUserinfo = await generateDpopProof(
+      privateKey,
+      publicJwk,
+      "GET",
+      urls.userinfo,
+      access_token   // ath claim = SHA256 hash of access token
+    );
+
     const userinfoResponse = await fetch(urls.userinfo, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${access_token}`,
+        "Authorization": `DPoP ${access_token}`,
+        "DPoP":          dpopForUserinfo,
       },
     });
 
     if (!userinfoResponse.ok) {
       const errText = await userinfoResponse.text();
       console.error("❌ Userinfo fetch failed:", errText);
-      deleteSession(state);
+      await deleteSession(state);
       return res.redirect(`${frontendUrl}/kyc?error=userinfo_failed`);
     }
 
     const encryptedUserinfo = await userinfoResponse.text();
     console.log("✅ Userinfo received, decrypting...");
 
-    // ── Step 3: Decrypt + verify userinfo ──
+    // ── Step 3: Decrypt + verify ──
     const personPayload = await decryptAndVerifyUserinfo(encryptedUserinfo);
+    const person        = personPayload?.person_info || personPayload;
 
-    // FAPI 2.0: person data is nested under person_info
-    const person = personPayload?.person_info || personPayload;
-
-    console.log("✅ MyInfo person data decrypted for user:", userId || "signup");
-    deleteSession(state);
+    console.log("✅ Person data decrypted for:", userId || "signup flow");
+    await deleteSession(state);
 
     // ── Step 4: Extract KYC fields ──
     const kyc = {
       verified:    true,
       verifiedAt:  new Date(),
       source:      "singpass",
-      name:        person?.name?.value || null,
-      dob:         person?.dob?.value || null,
-      sex:         person?.sex?.value || null,
+      name:        person?.name?.value        || null,
+      dob:         person?.dob?.value         || null,
+      sex:         person?.sex?.value         || null,
       nationality: person?.nationality?.value || null,
-      email:       person?.email?.value || null,
+      email:       person?.email?.value       || null,
       mobile:      person?.mobileno?.nbr?.value
         ? `${person.mobileno.prefix?.value || "+65"}${person.mobileno.nbr.value}`
         : null,
-      uinfin:      person?.uinfin?.value || null,
-      address:     person?.regadd
+      uinfin:  person?.uinfin?.value || null,
+      address: person?.regadd
         ? [
             person.regadd.block?.value,
             person.regadd.street?.value,
@@ -399,7 +451,7 @@ router.get("/callback", async (req, res) => {
         : null,
     };
 
-    // ── SIGNUP FLOW: redirect to /kyc with name so frontend shows sign up form ──
+    // ── SIGNUP FLOW: pass data to /kyc page ──
     if (isSignup) {
       const params = new URLSearchParams({
         status: "success",
@@ -410,21 +462,21 @@ router.get("/callback", async (req, res) => {
       return res.redirect(`${frontendUrl}/kyc?${params.toString()}`);
     }
 
-    // ── LOGGED-IN FLOW: save KYC directly to MongoDB ──
+    // ── LOGGED-IN FLOW: save KYC to MongoDB ──
     await User.findByIdAndUpdate(userId, { kyc }, { new: true });
     console.log("✅ KYC saved for user:", userId);
     return res.redirect(`${frontendUrl}/kyc?status=success`);
 
   } catch (err) {
     console.error("❌ MyInfo callback error:", err.message);
-    deleteSession(state);
+    await deleteSession(state);
     return res.redirect(`${frontendUrl}/kyc?error=processing_failed`);
   }
 });
 
 /*
 ========================================
-ROUTE 3: Get KYC status (logged-in users)
+ROUTE 3: KYC status
 GET /api/myinfo/status
 ========================================
 */
@@ -432,9 +484,9 @@ router.get("/status", protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("kyc");
     res.json({
-      verified:    user?.kyc?.verified   || false,
-      name:        user?.kyc?.name       || null,
-      verifiedAt:  user?.kyc?.verifiedAt || null,
+      verified:   user?.kyc?.verified   || false,
+      name:       user?.kyc?.name       || null,
+      verifiedAt: user?.kyc?.verifiedAt || null,
     });
   } catch (err) {
     console.error("❌ KYC status error:", err.message);
