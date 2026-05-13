@@ -344,20 +344,11 @@ router.get("/callback", async (req, res) => {
 
     console.log("✅ Token exchange success");
 
-    // ── Step 2: Fetch userinfo — FAPI 2.0 always uses DPoP ──
-    // Generate a FRESH DPoP proof for userinfo (new jti, new ath)
-    const dpopForUserinfo = await generateDpopProof(
-      ephemeralKeyPair,
-      "GET",
-      urls.userinfo,
-      access_token   // ath = hash of access token
-    );
-
+    // ── Step 2: Fetch userinfo — uses Bearer token (no DPoP for userinfo) ──
     const userinfoResponse = await fetch(urls.userinfo, {
       method: "GET",
       headers: {
-        "Authorization": `DPoP ${access_token}`,
-        "DPoP":          dpopForUserinfo,
+        "Authorization": `Bearer ${access_token}`,
       },
     });
 
