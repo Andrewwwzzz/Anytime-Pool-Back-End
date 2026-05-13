@@ -41,13 +41,13 @@ router.get("/.well-known/jwks.json", (req, res) => {
           ...signingJwk,
           use: "sig",
           alg: "ES256",
-          kid: "envopool-sig-1",
+          kid: "envopool-sig-2",
         },
         {
           ...encryptionJwk,
           use: "enc",
           alg: "RSA-OAEP-256",
-          kid: "envopool-enc-1",
+          kid: "envopool-enc-2",
         },
       ],
     });
