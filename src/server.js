@@ -70,17 +70,6 @@ app.use("/api/health", healthRoutes);
 
 /*
 ========================================
-JWKS ENDPOINT (Singpass MyInfo)
-Must be before body parsers.
-Singpass fetches this to verify your tokens.
-URL: https://api.envopoolsg.com/.well-known/jwks.json
-========================================
-*/
-const jwksRoutes = require("./routes/jwks.routes");
-app.use("/", jwksRoutes);
-
-/*
-========================================
 STRIPE WEBHOOK
 Must receive RAW body — define BEFORE express.json()
 ========================================
@@ -105,6 +94,7 @@ const paymentRoutes      = require("./routes/payment.routes.new");
 const authRoutes         = require("./routes/auth.routes");
 const adminRoutes        = require("./routes/admin.routes");
 const adminBookingRoutes = require("./routes/admin.booking.routes");
+const maintenanceRoutes  = require("./routes/maintenance.routes");
 const tableRoutes        = require("./routes/table.routes");
 const userRoutes         = require("./routes/user.routes");
 const transactionRoutes  = require("./routes/transaction.routes");
@@ -114,13 +104,6 @@ const availabilityRoutes = require("./routes/availability.routes");
 const setupRoutes        = require("./routes/setup.routes");
 const promoRoutes        = require("./routes/promo.routes");
 const termsRoutes        = require("./routes/terms.routes");
-
-/*
-========================================
-MYINFO ROUTE (Singpass KYC)
-========================================
-*/
-const myinfoRoutes = require("./routes/myinfo.routes");
 
 /*
 ========================================
@@ -138,6 +121,7 @@ app.use("/api/bookings",       bookingRoutes);
 app.use("/api/payments",       paymentRoutes);
 app.use("/api/auth",           authRoutes);
 app.use("/api/admin/bookings", adminBookingRoutes);  // ✅ more specific — must come FIRST
+app.use("/api/admin/maintenance", maintenanceRoutes); // ✅ more specific — must come before /api/admin
 app.use("/api/admin",          adminRoutes);
 app.use("/api/tables",         tableRoutes);
 app.use("/api/users",          userRoutes);
@@ -149,7 +133,6 @@ app.use("/api/availability",   availabilityRoutes);
 app.use("/api/setup",          setupRoutes);
 app.use("/api/promo",          promoRoutes);
 app.use("/api/terms",          termsRoutes);
-app.use("/api/myinfo",         myinfoRoutes);        // ✅ Singpass MyInfo KYC
 
 /*
 ========================================

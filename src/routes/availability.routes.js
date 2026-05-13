@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const Table = require("../models/table");
-const Booking = require("../models/Booking"); // ✅ capital B — matches the actual filename
+const Booking = require("../models/Booking");
+const MaintenanceWindow = require("../models/MaintenanceWindow");
 
 router.get("/", async (req, res) => {
   try {
@@ -33,16 +34,40 @@ router.get("/", async (req, res) => {
       (booking) => booking.tableId?.toString()
     );
 
+    // Find maintenance windows that overlap with requested time
+    const overlappingMaintenance = await MaintenanceWindow.find({
+      startTime: { $lt: end },
+      endTime: { $gt: start }
+    }).select("tableId reason");
+
+    const maintenanceTableIds = overlappingMaintenance.map(
+      (m) => m.tableId?.toString()
+    );
+
     const tables = await Table.find({ isActive: true });
 
-    const availability = tables.map((table) => ({
-      tableId: table._id,
-      tableNumber: table.tableNumber,
-      name: table.name,
-      basePrice: table.basePrice,
-      hardware_id: table.hardware_id,
-      available: !bookedTableIds.includes(table.hardware_id)
-    }));
+    const availability = tables.map((table) => {
+      const tableIdStr = table._id.toString();
+      const isBooked = bookedTableIds.includes(table.hardware_id);
+      const maintenanceEntry = overlappingMaintenance.find(
+        (m) => m.tableId?.toString() === tableIdStr
+      );
+      const isUnderMaintenance = !!maintenanceEntry;
+      // Also respect the permanent maintenance status flag
+      const isPermanentMaintenance = table.status === "maintenance";
+
+      return {
+        tableId: table._id,
+        tableNumber: table.tableNumber,
+        name: table.name,
+        basePrice: table.basePrice,
+        hardware_id: table.hardware_id,
+        available: !isBooked && !isUnderMaintenance && !isPermanentMaintenance,
+        maintenanceReason: isUnderMaintenance
+          ? (maintenanceEntry.reason || "Maintenance")
+          : isPermanentMaintenance ? "Maintenance" : null
+      };
+    });
 
     res.json({
       startTime,
