@@ -181,7 +181,7 @@ const getSingpassUrls = () => {
   return {
     par: `${base}/fapi/par`,
     authorize: `${base}/fapi/auth`,
-    token: `${base}/token`,
+    token: `${base}/fapi/token`,
     userinfo: `${base}/userinfo`,
     issuer: base,
   };
