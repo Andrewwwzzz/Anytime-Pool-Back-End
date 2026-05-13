@@ -125,6 +125,7 @@ router.post("/login", async (req, res) => {
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
+        username: user.username || null,
         kyc: user.kyc || null
       }
     });
@@ -164,6 +165,7 @@ router.get("/me", auth, async (req, res) => {
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
         shortId: user.shortId || null,
+        username: user.username || null,
         createdAt: user.createdAt,
         kyc: user.kyc || null
       }
@@ -213,7 +215,7 @@ Lets users update their name, phone, date of birth.
 */
 router.post("/update-profile", auth, async (req, res) => {
   try {
-    const { name, phone, dateOfBirth } = req.body;
+    const { name, phone, dateOfBirth, username } = req.body;
 
     // Fetch current user to check KYC status
     const currentUser = await User.findById(req.user.id);
@@ -224,6 +226,7 @@ router.post("/update-profile", auth, async (req, res) => {
     // Build update object — only include fields that were sent
     const updates = {};
     if (phone !== undefined) updates.phone = phone;
+    if (username !== undefined) updates.username = username;
 
     // KYC users cannot change their name or date of birth
     if (name !== undefined) {
@@ -263,6 +266,7 @@ router.post("/update-profile", auth, async (req, res) => {
         rewardPoints: user.rewardPoints || 0,
         phone: user.phone || null,
         dateOfBirth: user.dateOfBirth || null,
+        username: user.username || null,
         kyc: user.kyc || null
       }
     });
